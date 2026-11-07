@@ -1,0 +1,17 @@
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.csproj.AssemblyReference.cache
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.AssemblyInfoInputs.cache
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.AssemblyInfo.cs
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.csproj.CoreCompileInputs.cache
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Infrastructure.deps.json
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Infrastructure.dll
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Infrastructure.pdb
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Application.dll
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Domain.dll
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Application.pdb
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\bin\Debug\net9.0\HydroPulse.Domain.pdb
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPul.9FBC3262.Up2Date
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.dll
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\refint\HydroPulse.Infrastructure.dll
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\HydroPulse.Infrastructure.pdb
+F:\devops\HydroPulse\src\HydroPulse.Infrastructure\obj\Debug\net9.0\ref\HydroPulse.Infrastructure.dll

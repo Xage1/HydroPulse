@@ -1,0 +1,11 @@
+F:\devops\HydroPulse\src\HydroPulse.Domain\bin\Debug\net9.0\HydroPulse.Domain.deps.json
+F:\devops\HydroPulse\src\HydroPulse.Domain\bin\Debug\net9.0\HydroPulse.Domain.dll
+F:\devops\HydroPulse\src\HydroPulse.Domain\bin\Debug\net9.0\HydroPulse.Domain.pdb
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.GeneratedMSBuildEditorConfig.editorconfig
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.AssemblyInfoInputs.cache
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.AssemblyInfo.cs
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.csproj.CoreCompileInputs.cache
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.dll
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\refint\HydroPulse.Domain.dll
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\HydroPulse.Domain.pdb
+F:\devops\HydroPulse\src\HydroPulse.Domain\obj\Debug\net9.0\ref\HydroPulse.Domain.dll
