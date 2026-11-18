@@ -1,3 +1,4 @@
+
 using HydroPulse.Application.Interfaces;
 using HydroPulse.Domain.Entities;
 using HydroPulse.Infrastructure.Entities;
@@ -12,6 +13,11 @@ public class TelemetryRepository : ITelemetryRepository
     public TelemetryRepository(HydroPulseDbContext context)
     {
         _context = context;
+    }
+
+    public async Task AddAsync(TelemetryRecord record)
+    {
+        await AddRecordAsync(record);
     }
 
     public async Task AddRecordAsync(TelemetryRecord record, CancellationToken cancellationToken = default)
@@ -32,13 +38,12 @@ public class TelemetryRepository : ITelemetryRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IEnumerable<TelemetryRecord>> GetRecentRecordsAsync(Guid stackId, int limit = 100, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<TelemetryRecord>> GetLatestRecordsAsync(int limit)
     {
         var entities = await _context.TelemetryRecords
-            .Where(r => r.StackId == stackId)
             .OrderByDescending(r => r.Timestamp)
             .Take(limit)
-            .ToListAsync(cancellationToken);
+            .ToListAsync();
 
         return entities.Select(e => new TelemetryRecord(
             e.Id,
@@ -52,3 +57,4 @@ public class TelemetryRepository : ITelemetryRepository
         ));
     }
 }
+
