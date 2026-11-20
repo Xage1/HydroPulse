@@ -93,12 +93,15 @@ foreach (var site in sites)
     }
 }
 
+var fx = await FxRates.LoadAsync(Path.Combine(root, "data", "fx-cache.json"));
+
 var output = new
 {
     generatedUtc = DateTime.UtcNow,
     weatherSource = "NASA POWER hourly (CERES SYN1deg irradiance, MERRA-2 wind/temperature), year 2024, UTC",
     note = "All technical and financial defaults are placeholders; replace with cited or customer values.",
     assumptions = new ScenarioConfig { Electrolyzer = electrolyzer },
+    fx,
     scenarios
 };
 

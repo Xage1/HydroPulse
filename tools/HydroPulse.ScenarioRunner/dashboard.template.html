@@ -55,6 +55,11 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .seg button:hover { background:var(--wash); }
 .seg button[aria-pressed="true"] { background:var(--ink); color:var(--surface); font-weight:600; }
 
+.fgroup select, .fgroup input { font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:6px 10px; max-width:100%; }
+.fgroup input#fxCode { width:5.4em; text-transform:uppercase; }
+.fgroup input#fxRate { width:8em; }
+.fxnote { font-size:12px; color:var(--muted); margin:-6px 0 14px; }
+.fxnote a { color:inherit; }
 .note { border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink2); margin:0 0 14px; }
 
 .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; min-width:0; }
@@ -133,7 +138,10 @@ ul.lim { margin:8px 0 0; padding-left:18px; font-size:12.5px; color:var(--ink2);
   <div class="filters" role="group" aria-label="Scenario filters">
     <div class="fgroup"><span>Site</span><div class="seg" id="siteSeg"></div></div>
     <div class="fgroup"><span>Operating mode</span><div class="seg" id="modeSeg"></div></div>
+    <div class="fgroup"><span id="fxLbl">Currency</span><select id="fxSel" aria-labelledby="fxLbl"></select>
+      <span id="fxCustom" hidden><input id="fxCode" maxlength="3" placeholder="Code" aria-label="Currency code, three letters"><input id="fxRate" type="number" min="0" step="any" placeholder="per 1 USD" aria-label="Units of your currency per 1 US dollar"></span></div>
   </div>
+  <p class="fxnote" id="fxNote"></p>
   <p class="note" id="windNote" hidden></p>
 
   <section class="hero" aria-live="polite">
@@ -202,7 +210,26 @@ function html(tag, props, ...kids) {
   return e;
 }
 const num = (v, d = 0) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const usd = (v, d = 2) => v == null ? 'n/a' : '$' + num(v, d);
+
+// Display currency. The model runs in US dollars; conversion happens only when values are shown.
+const FX = { code: 'USD', rate: 1 };
+function sym() {
+  if (FX.code === 'USD') return '$';
+  try {
+    const p = new Intl.NumberFormat('en', { style: 'currency', currency: FX.code, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find(x => x.type === 'currency');
+    const t = p ? p.value : FX.code;
+    return /^[A-Za-z]/.test(t) ? t + ' ' : t;
+  } catch (e) { return FX.code + ' '; }
+}
+const money = (v, d = 2) => { if (v == null) return 'n/a'; const x = v * FX.rate; return sym() + num(x, Math.abs(x) >= 100 ? 0 : d); };
+function axisMoney(t) {
+  const d = Math.abs(t) >= 100 || Number.isInteger(t) ? 0 : Math.abs(t * 10 - Math.round(t * 10)) < 1e-6 ? 1 : 2;
+  return sym() + num(t, d);
+}
+function bigMoney(v) {
+  const x = v * FX.rate, a = Math.abs(x);
+  return sym() + (a >= 1e9 ? num(x / 1e9, 1) + 'B' : num(x / 1e6, a >= 1e8 ? 0 : 1) + 'M');
+}
 const pct = (v, d = 0) => num(v * 100, d) + '%';
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -394,34 +421,35 @@ function stackedBars(box, o) {
   const rowH = 58, axisH = 24, pad = 8, H = o.rows.length * rowH + axisH + pad;
   const { svg, W } = mount(box, H);
   svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria);
-  const xl = 2, xr = W - 64, pw = xr - xl;
-  const sc = niceScale(0, Math.max(...o.rows.map(r => r.total || 0)) * 1.02, 4), px = v => xl + v / sc.max * pw;
+  const maxTot = Math.max(...o.rows.map(r => r.total || 0)), xl = 2, xr = W - Math.max(64, money(maxTot).length * 7.5 + 14), pw = xr - xl;
+  const sc = niceScale(0, Math.max(...o.rows.map(r => r.total || 0)) * FX.rate * 1.02, 4), px = v => xl + v / sc.max * pw;
   sc.ticks.forEach(t => {
     sty(svgEl('line', { x1: px(t), x2: px(t), y1: pad, y2: H - axisH }, svg), { stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', strokeWidth: 1 });
-    svgEl('text', { x: px(t), y: H - 6, 'text-anchor': t === 0 ? 'start' : 'middle', class: 'axt' }, svg).textContent = '$' + t;
+    svgEl('text', { x: px(t), y: H - 6, 'text-anchor': t === 0 ? 'start' : 'middle', class: 'axt' }, svg).textContent = axisMoney(t);
   });
   o.rows.forEach((r, ri) => {
     const top = pad + ri * rowH, barY = top + 24;
-    const g = svgEl('g', { role: 'button', tabindex: 0, 'aria-label': `${r.label}: ${usd(r.total)} per kg${r.selected ? ' (selected)' : ''}` }, svg);
+    const g = svgEl('g', { role: 'button', tabindex: 0, 'aria-label': `${r.label}: ${money(r.total)} per kg${r.selected ? ' (selected)' : ''}` }, svg);
     g.style.cursor = 'pointer';
     if (r.selected) sty(svgEl('rect', { x: 0, y: top, width: W, height: rowH - 4, rx: 8 }, g), { fill: 'var(--wash)' });
     svgEl('text', { x: 8, y: top + 17, class: r.selected ? 'txtb' : 'txt' }, g).textContent = r.label;
     const segs = r.segments.filter(s => s.value > 0.0005);
     let x = px(0);
     segs.forEach((s, si) => {
-      const w = s.value / sc.max * pw, last = si === segs.length - 1, dw = Math.max(0, w - (last ? 0 : 2));
+      const w = s.value * FX.rate / sc.max * pw, last = si === segs.length - 1, dw = Math.max(0, w - (last ? 0 : 2));
       const p = sty(svgEl('path', { d: rrect(x + 8 * 0, barY, dw, 20, last ? { tr: 4, br: 4 } : {}) }, g), { fill: s.color });
-      if (dw > 46) {
-        const t = svgEl('text', { x: x + 7, y: barY + 14, class: 'axt' }, g); t.textContent = usd(s.value);
+      const lab = money(s.value);
+      if (dw > lab.length * 6.8 + 14) {
+        const t = svgEl('text', { x: x + 7, y: barY + 14, class: 'axt' }, g); t.textContent = lab;
         sty(t, { fill: s.onColor || 'var(--on-fill)', fontSize: '11px', fontWeight: 600 });
       }
       const over = e => showTip(e.clientX, e.clientY, r.label, [
-        { color: s.color, value: usd(s.value), label: s.name + ' · ' + pct(s.value / r.total) },
-        { color: null, value: usd(r.total), label: 'Total LCOH per kg' }]);
+        { color: s.color, value: money(s.value), label: s.name + ' · ' + pct(s.value / r.total) },
+        { color: null, value: money(r.total), label: 'Total LCOH per kg' }]);
       p.addEventListener('pointermove', over); p.addEventListener('pointerleave', hideTip);
       x += w;
     });
-    svgEl('text', { x: x + 8, y: barY + 15, class: 'txtb' }, g).textContent = usd(r.total);
+    svgEl('text', { x: x + 8, y: barY + 15, class: 'txtb' }, g).textContent = money(r.total);
     g.addEventListener('click', () => r.onClick());
     g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.onClick(); } });
   });
@@ -432,12 +460,14 @@ function tornado(box, o) {
   const rowH = 50, axisH = 24, pad = 6, H = o.rows.length * rowH + axisH + pad;
   const { svg, W } = mount(box, H);
   svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria);
-  const labelPad = 84, xl = labelPad, xr = W - labelPad;
+  const widest = Math.max(...o.rows.flatMap(r => r.items.map(i => money(i.value).length))), labelPad = Math.max(84, widest * 7 + 52), xl = labelPad, xr = W - labelPad;
   const maxD = Math.max(0.01, ...o.rows.flatMap(r => r.items.map(i => Math.abs(i.value - o.base))));
-  const sc = niceScale(o.base - maxD, o.base + maxD, 4), px = v => xl + (v - sc.min) / (sc.max - sc.min) * (xr - xl);
-  sc.ticks.forEach(t => {
-    sty(svgEl('line', { x1: px(t), x2: px(t), y1: pad, y2: H - axisH }, svg), { stroke: 'var(--grid)', strokeWidth: 1 });
-    svgEl('text', { x: px(t), y: H - 6, 'text-anchor': 'middle', class: 'axt' }, svg).textContent = '$' + num(t, t % 1 ? 1 : 0);
+  const sc = niceScale((o.base - maxD) * FX.rate, (o.base + maxD) * FX.rate, 4), px = v => xl + (v * FX.rate - sc.min) / (sc.max - sc.min) * (xr - xl);
+  // thin the axis labels when the currency's numbers are wide
+  const skip = Math.max(1, Math.ceil((axisMoney(sc.max).length * 6.6 + 14) / ((xr - xl) / Math.max(1, sc.ticks.length - 1))));
+  sc.ticks.forEach((t, ti) => {
+    sty(svgEl('line', { x1: px(t / FX.rate), x2: px(t / FX.rate), y1: pad, y2: H - axisH }, svg), { stroke: 'var(--grid)', strokeWidth: 1 });
+    if (ti % skip === 0) svgEl('text', { x: px(t / FX.rate), y: H - 6, 'text-anchor': 'middle', class: 'axt' }, svg).textContent = axisMoney(t);
   });
   sty(svgEl('line', { x1: px(o.base), x2: px(o.base), y1: pad, y2: H - axisH }, svg), { stroke: 'var(--axis)', strokeWidth: 1 });
   o.rows.forEach((r, ri) => {
@@ -452,9 +482,9 @@ function tornado(box, o) {
       const right = d > 0, x = right ? px(o.base) : px(it.value), w = Math.abs(px(it.value) - px(o.base));
       const bar = sty(svgEl('path', { d: rrect(x, barY, w, 16, right ? { tr: 4, br: 4 } : { tl: 4, bl: 4 }) }, svg), { fill: right ? 'var(--hi)' : 'var(--lo)' });
       const t = svgEl('text', { x: right ? x + w + 6 : x - 6, y: barY + 12, 'text-anchor': right ? 'start' : 'end', class: 'txt2' }, svg);
-      t.textContent = `${it.label} → ${usd(it.value)}`;
+      t.textContent = `${it.label} → ${money(it.value)}`;
       bar.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, r.name, [
-        { color: right ? 'var(--hi)' : 'var(--lo)', value: (d > 0 ? '+' : '−') + usd(Math.abs(d)), label: `${it.label} → ${usd(it.value)} per kg` }]));
+        { color: right ? 'var(--hi)' : 'var(--lo)', value: (d > 0 ? '+' : '−') + money(Math.abs(d)), label: `${it.label} → ${money(it.value)} per kg` }]));
       bar.addEventListener('pointerleave', hideTip);
     });
   });
@@ -563,7 +593,7 @@ const COMPONENTS = [
 
 function renderModes() {
   const s = cur(), c = cards.modes;
-  c.sub.textContent = `${s.site}: cost of a kilogram of hydrogen by component, $/kg. Click a bar to switch mode.`;
+  c.sub.textContent = `${s.site}: cost of a kilogram of hydrogen by component, ${FX.code} per kg. Click a bar to switch mode.`;
   legend(c.lg, COMPONENTS);
   const rows = MODE_ORDER.map(k => find(state.site, k)).filter(Boolean).map(sc => ({
     label: MODE_SHORT[sc.modeKey], total: sc.result.finance.lcohUsdPerKg, selected: sc.modeKey === state.mode,
@@ -571,10 +601,10 @@ function renderModes() {
     segments: sc.result.finance.breakdown ? COMPONENTS.map(k => ({ name: k.name, color: k.color, onColor: k.onColor, value: k.f(sc.result.finance.breakdown) })) : []
   }));
   stackedBars(c.plot, { rows, aria: `Levelized cost of hydrogen by operating mode for ${s.site}` });
-  table(c.tbl, ['Mode', ...COMPONENTS.map(k => k.name), 'Total $/kg'],
-    rows.map(r => [r.label, ...(r.segments.length ? r.segments.map(x => usd(x.value)) : COMPONENTS.map(() => 'n/a')), usd(r.total)]));
+  table(c.tbl, ['Mode', ...COMPONENTS.map(k => k.name), `Total ${FX.code}/kg`],
+    rows.map(r => [r.label, ...(r.segments.length ? r.segments.map(x => money(x.value)) : COMPONENTS.map(() => 'n/a')), money(r.total)]));
   const g = k => find(state.site, k)?.result.finance.lcohUsdPerKg;
-  const d = (a, b) => (a != null && b != null) ? ((a - b >= 0 ? '+' : '−') + usd(Math.abs(a - b)) + '/kg') : 'n/a';
+  const d = (a, b) => (a != null && b != null) ? ((a - b >= 0 ? '+' : '−') + money(Math.abs(a - b)) + '/kg') : 'n/a';
   c.foot.textContent = `Hourly vs monthly matching: ${d(g('hourly'), g('monthly'))}. Hourly matching vs no matching: ${d(g('hourly'), g('none'))}. ` +
     'Unmatched grid hydrogen is cheapest only because it is not certifiable as renewable.';
 }
@@ -589,22 +619,22 @@ function renderSweep() {
   const pts = valid.filter(p => p.lcohUsdPerKg <= floor * 2.2), clipped = pts.length < valid.length;
   const lo = Math.min(...pts.map(p => p.lcohUsdPerKg)), hi = Math.max(...pts.map(p => p.lcohUsdPerKg));
   const bi = pts.findIndex(p => p.ratio === s.bestRatio), xmax = Math.max(...all.map(p => p.ratio));
-  const sc = niceScale(Math.max(0, lo - (hi - lo) * .15), hi + (hi - lo) * .1, 4);
+  const R = FX.rate, sc = niceScale(Math.max(0, (lo - (hi - lo) * .15) * R), (hi + (hi - lo) * .1) * R, 4);
   panelChart(c.plot, {
     aria: 'Levelized cost of hydrogen against renewable capacity ratio',
-    xs: pts.map(p => p.ratio), x0: 0, x1: xmax, ml: 50, markers: true,
+    xs: pts.map(p => p.ratio), x0: 0, x1: xmax, ml: Math.max(50, axisMoney(sc.max).length * 6.6 + 14), markers: true,
     xTicks: Array.from({ length: Math.floor(xmax) + 1 }, (_, i) => ({ x: i, label: i + '×' })),
-    panels: [{ title: 'LCOH ($/kg)', h: 220, yMin: sc.min, yMax: sc.max, yFmt: v => '$' + num(v, 1), series: [{ name: 'LCOH', color: C.re, vals: pts.map(p => p.lcohUsdPerKg) }] }],
-    highlight: bi >= 0 ? { i: bi, text: `Best ${num(pts[bi].ratio, 2)}× · ${usd(pts[bi].lcohUsdPerKg)}` } : null,
+    panels: [{ title: `LCOH (${FX.code} per kg)`, h: 220, yMin: sc.min, yMax: sc.max, yFmt: v => axisMoney(v), series: [{ name: 'LCOH', color: C.re, vals: pts.map(p => p.lcohUsdPerKg * R) }] }],
+    highlight: bi >= 0 ? { i: bi, text: `Best ${num(pts[bi].ratio, 2)}× · ${money(pts[bi].lcohUsdPerKg)}` } : null,
     tipTitle: i => `${num(pts[i].ratio, 2)}× electrolyzer rating`,
     tipRows: i => [
-      { color: C.re, value: usd(pts[i].lcohUsdPerKg), label: 'LCOH per kg' },
+      { color: C.re, value: money(pts[i].lcohUsdPerKg), label: 'LCOH per kg' },
       { color: null, value: pct(pts[i].electrolyzerCapacityFactor), label: 'Electrolyzer utilisation' },
       { color: null, value: pct(pts[i].surplusShare), label: 'Renewable surplus' },
       { color: null, value: num(pts[i].hydrogenTonnes, 0) + ' t/yr', label: 'Hydrogen' }]
   });
-  table(c.tbl, ['Ratio', 'LCOH $/kg', 'Electrolyzer utilisation', 'Renewable surplus', 'Hydrogen t/yr'],
-    all.map(p => [num(p.ratio, 2) + '×', usd(p.lcohUsdPerKg), pct(p.electrolyzerCapacityFactor), pct(p.surplusShare), num(p.hydrogenTonnes, 0)]));
+  table(c.tbl, ['Ratio', `LCOH ${FX.code}/kg`, 'Electrolyzer utilisation', 'Renewable surplus', 'Hydrogen t/yr'],
+    all.map(p => [num(p.ratio, 2) + '×', money(p.lcohUsdPerKg), pct(p.electrolyzerCapacityFactor), pct(p.surplusShare), num(p.hydrogenTonnes, 0)]));
   const edge = s.bestRatio >= xmax;
   c.foot.textContent = (edge ? 'The best size is at the edge of the tested range, so the true optimum may be larger. ' : '') +
     (clipped ? 'Sizes costing more than 2.2 times the best are left off the chart (see the table). ' : '') +
@@ -638,21 +668,21 @@ function renderDuration() {
 
 function renderTornado() {
   const s = cur(), c = cards.tornado, base = s.result.finance.lcohUsdPerKg;
-  c.sub.textContent = `Change in LCOH when one assumption moves, from a base of ${usd(base)}/kg`;
+  c.sub.textContent = `Change in LCOH when one assumption moves, from a base of ${money(base)}/kg`;
   legend(c.lg, [{ name: 'Lowers cost', color: 'var(--lo)' }, { name: 'Raises cost', color: 'var(--hi)' }]);
   const rows = s.sensitivity.filter(b => b.lcohLow != null && b.lcohHigh != null)
     .map(b => ({ name: b.parameter, items: [{ label: b.lowLabel, value: b.lcohLow }, { label: b.highLabel, value: b.lcohHigh }] }))
     .sort((a, b) => Math.max(...b.items.map(i => Math.abs(i.value - base))) - Math.max(...a.items.map(i => Math.abs(i.value - base))));
   if (base == null || !rows.length) { c.plot.textContent = 'No sensitivity available.'; return; }
   tornado(c.plot, { rows, base, aria: 'Sensitivity of levelized cost of hydrogen to key assumptions' });
-  table(c.tbl, ['Assumption', 'Low case', 'LCOH $/kg', 'High case', 'LCOH $/kg'], rows.map(r => [r.name, r.items[0].label, usd(r.items[0].value), r.items[1].label, usd(r.items[1].value)]));
+  table(c.tbl, ['Assumption', 'Low case', `LCOH ${FX.code}/kg`, 'High case', `LCOH ${FX.code}/kg`], rows.map(r => [r.name, r.items[0].label, money(r.items[0].value), r.items[1].label, money(r.items[1].value)]));
   c.foot.textContent = 'Grid tariff has no effect in modes that import no grid power.';
 }
 
 // ---------- header: hero, chips, tiles ----------
 function renderSummary() {
   const s = cur(), r = s.result, y = r.year1, f = r.finance, p = r.plant;
-  $('#lcoh').replaceChildren(document.createTextNode(f.lcohUsdPerKg == null ? 'n/a' : usd(f.lcohUsdPerKg)), html('small', { text: 'per kg' }));
+  $('#lcoh').replaceChildren(document.createTextNode(f.lcohUsdPerKg == null ? 'n/a' : money(f.lcohUsdPerKg)), html('small', { text: 'per kg' }));
   const chip = (ok, name, share) => html('div', { class: 'chip ' + (ok ? 'ok' : 'bad') },
     html('b', { text: ok ? '✓' : '✕', 'aria-hidden': 'true' }),
     html('span', { text: ok ? `Meets ${name}` : `Does not meet ${name}: ${pct(share)} matched` }));
@@ -669,7 +699,7 @@ function renderSummary() {
     tile('Renewable plant utilisation', pct(y.renewableCapacityFactor), `capacity factor of ${re}`),
     tile('Energy per kg', num(y.specificConsumptionKwhPerKg, 1) + ' kWh', 'stack plus compression'),
     tile('Plant', num(p.electrolyzerMw, 0) + ' MW', `electrolyzer + ${re} (${num(p.renewableToElectrolyzerRatio, 2)}×)`),
-    tile('Total capex', '$' + num(f.totalCapexUsd / 1e6, 1) + 'M', `${f.stackReplacements} stack replacement${f.stackReplacements === 1 ? '' : 's'} in 20 years`));
+    tile('Total capex', bigMoney(f.totalCapexUsd), `${f.stackReplacements} stack replacement${f.stackReplacements === 1 ? '' : 's'} in 20 years`));
   const note = $('#windNote');
   note.hidden = !(p.windMw > 0);
   note.textContent = 'Wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid). Reanalysis can understate local wind in complex terrain, so treat wind results as conservative until measured site data is loaded.';
@@ -683,8 +713,8 @@ function renderAssumptions() {
   grp('Compression', [['Inlet to outlet', cm.inletBar + ' to ' + cm.outletBar + ' bar'], ['Stages', cm.stages]]);
   grp('Solar', [['System efficiency', pct(pv.systemEfficiencyFactor)], ['Temperature coefficient', pct(pv.tempCoefficientPerC, 2) + ' per °C'], ['Degradation', pct(pv.degradationPerYear, 1) + ' per year']]);
   grp('Wind', [['Hub height', w.hubHeightM + ' m'], ['Cut-in / rated / cut-out', `${w.cutInMs} / ${w.ratedMs} / ${w.cutOutMs} m/s`], ['Losses', pct(1 - w.lossFactor)]]);
-  grp('Grid', [['Import tariff', usd(g.importTariffUsdPerKwh) + '/kWh'], ['Wheeling fee (monthly mode)', usd(g.wheelingFeeUsdPerKwh) + '/kWh'], ['Export price', usd(g.exportPriceUsdPerKwh) + '/kWh']]);
-  grp('Finance', [['Discount rate', pct(fi.discountRate, 1)], ['Project life', fi.projectLifetimeYears + ' years'], ['Electrolyzer capex', '$' + num(fi.electrolyzerCapexUsdPerKw) + '/kW'], ['Solar capex', '$' + num(fi.pvCapexUsdPerKwp) + '/kWp'], ['Wind capex', '$' + num(fi.windCapexUsdPerKw) + '/kW'], ['Other capex', pct(fi.otherCapexFraction) + ' of the above'], ['Opex', pct(fi.opexFractionOfCapexPerYear, 1) + ' of capex per year'], ['Stack life', num(fi.stackLifetimeHours) + ' h']]);
+  grp('Grid', [['Import tariff', money(g.importTariffUsdPerKwh) + '/kWh'], ['Wheeling fee (monthly mode)', money(g.wheelingFeeUsdPerKwh) + '/kWh'], ['Export price', money(g.exportPriceUsdPerKwh) + '/kWh']]);
+  grp('Finance', [['Discount rate', pct(fi.discountRate, 1)], ['Project life', fi.projectLifetimeYears + ' years'], ['Electrolyzer capex', money(fi.electrolyzerCapexUsdPerKw, 0) + '/kW'], ['Solar capex', money(fi.pvCapexUsdPerKwp, 0) + '/kWp'], ['Wind capex', money(fi.windCapexUsdPerKw, 0) + '/kW'], ['Other capex', pct(fi.otherCapexFraction) + ' of the above'], ['Opex', pct(fi.opexFractionOfCapexPerYear, 1) + ' of capex per year'], ['Stack life', num(fi.stackLifetimeHours) + ' h']]);
   const L = [
     D.note,
     'Solar uses horizontal irradiance as a proxy for tilted panels. Compression assumes ideal-gas behaviour, which understates the energy needed above about 350 bar.',
@@ -708,8 +738,57 @@ function renderFilters() {
   mk($('#modeSeg'), MODE_ORDER.map(k => [k, MODE_SHORT[k]]), () => state.mode, k => state.mode = k);
 }
 
+// ---------- currency ----------
+const FXD = D.fx && D.fx.rates ? D.fx : null;
+const COMMON = ['USD','KES','EUR','GBP','ZAR','TZS','UGX','RWF','ETB','NGN','GHS','EGP','MAD','AED','SAR','INR','CNY','JPY','AUD','CAD','CHF','BRL','MXN','SEK','NOK'];
+let names = null; try { names = new Intl.DisplayNames(['en'], { type: 'currency' }); } catch (e) {}
+const cname = c => { let n = ''; try { n = names ? names.of(c) : ''; } catch (e) {} return n && n !== c ? `${c} · ${n}` : c; };
+function setCurrency(code, rate) { FX.code = code; FX.rate = rate; }
+function renderFxNote() {
+  const n = $('#fxNote'); n.replaceChildren();
+  if (FX.code === 'USD') {
+    n.append(document.createTextNode(FXD ? 'Costs are calculated in US dollars. Pick a currency to see them converted. ' : 'Costs are calculated in US dollars. To see another currency, choose Custom and enter the exchange rate. '));
+  } else {
+    const custom = $('#fxSel').value === '__custom';
+    n.append(document.createTextNode(`Converted at 1 USD = ${num(FX.rate, FX.rate >= 100 ? 2 : 4)} ${FX.code}` + (custom ? ' (rate you entered). ' : FXD ? ` (rates updated ${FXD.asOf}${FXD.status === 'cached' ? ', saved copy, not refreshed this run' : ''}). ` : '. ')));
+  }
+  n.append(document.createTextNode('Conversion is for display only; the calculation itself is unchanged. '));
+  if (FXD && FXD.sourceUrl) n.append(html('a', { href: FXD.sourceUrl, target: '_blank', rel: 'noopener noreferrer', text: 'Rates By Exchange Rate API' }));
+}
+function initCurrency() {
+  const sel = $('#fxSel'), codeIn = $('#fxCode'), rateIn = $('#fxRate'), box = $('#fxCustom');
+  const add = (parent, c) => parent.append(html('option', { value: c, text: cname(c) }));
+  const g1 = html('optgroup', { label: 'Common' }), g2 = html('optgroup', { label: 'All currencies' });
+  const avail = FXD ? Object.keys(FXD.rates).filter(c => FXD.rates[c] > 0) : ['USD'];
+  COMMON.filter(c => c === 'USD' || avail.includes(c)).forEach(c => add(g1, c));
+  avail.filter(c => !COMMON.includes(c)).sort().forEach(c => add(g2, c));
+  sel.append(g1); if (g2.children.length) sel.append(g2);
+  sel.append(html('option', { value: '__custom', text: 'Custom rate…' }));
+  const apply = () => {
+    const v = sel.value;
+    box.hidden = v !== '__custom';
+    if (v === '__custom') {
+      const code = (codeIn.value || '').trim().toUpperCase(), r = parseFloat(rateIn.value);
+      setCurrency(code.length === 3 ? code : 'USD', code.length === 3 && r > 0 && isFinite(r) ? r : 1);
+    } else setCurrency(v, v === 'USD' ? 1 : FXD.rates[v]);
+    try { localStorage.setItem('hp-fx', JSON.stringify({ v, code: codeIn.value, rate: rateIn.value })); } catch (e) {}
+    renderFxNote(); renderAll();
+  };
+  try {
+    const sv = JSON.parse(localStorage.getItem('hp-fx') || 'null');
+    if (sv && [...sel.options].some(o => o.value === sv.v)) { sel.value = sv.v; codeIn.value = sv.code || ''; rateIn.value = sv.rate || ''; }
+  } catch (e) {}
+  sel.value = sel.value || 'USD';
+  sel.addEventListener('change', apply); codeIn.addEventListener('input', apply); rateIn.addEventListener('input', apply);
+  const v = sel.value; box.hidden = v !== '__custom';
+  if (v === '__custom') { const code = (codeIn.value || '').trim().toUpperCase(), r = parseFloat(rateIn.value); setCurrency(code.length === 3 ? code : 'USD', code.length === 3 && r > 0 ? r : 1); }
+  else setCurrency(v, v === 'USD' ? 1 : (FXD ? FXD.rates[v] : 1));
+  renderFxNote();
+}
+function redrawCharts() { renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }
+
 function renderAll() {
-  renderFilters(); renderSummary(); renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado();
+  renderFilters(); renderSummary(); renderAssumptions(); renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado();
 }
 
 // ---------- theme ----------
@@ -725,8 +804,8 @@ $('#theme').addEventListener('click', () => { ti = (ti + 1) % themes.length; app
 
 // ---------- boot ----------
 $('#src').textContent = `${D.weatherSource}. Generated ${new Date(D.generatedUtc).toISOString().slice(0, 10)}.`;
-applyTheme(); buildCards(); renderAssumptions(); renderAll();
-let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }, 120); }).observe(document.body);
+applyTheme(); buildCards(); initCurrency(); renderAll();
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { redrawCharts(); }, 120); }).observe(document.body);
 })();
 </script>
 </body>
