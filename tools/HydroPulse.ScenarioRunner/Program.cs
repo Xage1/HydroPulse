@@ -3,7 +3,8 @@ using System.Text.Json.Serialization;
 using HydroPulse.Domain.Engineering;
 
 // Usage: dotnet run --project tools\HydroPulse.ScenarioRunner -c Release [repoRoot]
-// Reads data/weather/{nairobi,turkana}-2024.csv and writes out/results.json and out/dashboard.html.
+// Reads data/weather/{nairobi,turkana}-2024.csv and writes out/results.json and out/dashboard.html,
+// and copies the dashboard into the API's wwwroot so the API serves it (with the live view) at /.
 
 string root = args.Length > 0 ? Path.GetFullPath(args[0]) : Directory.GetCurrentDirectory();
 string weatherDir = Path.Combine(root, "data", "weather");
@@ -125,6 +126,7 @@ if (File.Exists(templatePath))
     string htmlPath = Path.Combine(outDir, "dashboard.html");
     File.WriteAllText(htmlPath, html);
     Console.WriteLine($"Wrote {htmlPath}  <- open this in a browser");
+    await LiveAssets.PublishAsync(root, html);
 }
 else
 {

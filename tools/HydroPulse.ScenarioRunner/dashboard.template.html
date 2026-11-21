@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HydroPulse scenario explorer</title>
+<title>HydroPulse</title>
 <style>
 :root {
   color-scheme: light;
@@ -60,6 +60,15 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .fgroup input#fxRate { width:8em; }
 .fxnote { font-size:12px; color:var(--muted); margin:-6px 0 14px; }
 .fxnote a { color:inherit; }
+.chip.idle b { color:var(--muted); }
+.livebar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin:0 0 14px; font-size:12.5px; }
+.pill { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--border); background:var(--surface); border-radius:999px; padding:3px 11px 3px 9px; color:var(--ink2); }
+.pill::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--muted); }
+.pill[data-state="live"]::before { background:var(--good); }
+.pill[data-state="connecting"]::before, .pill[data-state="reconnecting"]::before { background:var(--s4); }
+.pill[data-state="offline"]::before { background:var(--crit); }
+.pill.tag::before { display:none; }
+.pill.tag { border-color:var(--s4); color:var(--ink); padding:3px 11px; }
 .note { border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink2); margin:0 0 14px; }
 
 .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; min-width:0; }
@@ -129,38 +138,66 @@ ul.lim { margin:8px 0 0; padding-left:18px; font-size:12.5px; color:var(--ink2);
 <div class="wrap">
   <header>
     <div>
-      <h1>HydroPulse scenario explorer</h1>
+      <h1>HydroPulse</h1>
       <p class="sub" id="src"></p>
     </div>
     <button class="ghost" id="theme" type="button" aria-label="Change colour theme">Theme: auto</button>
   </header>
 
-  <div class="filters" role="group" aria-label="Scenario filters">
-    <div class="fgroup"><span>Site</span><div class="seg" id="siteSeg"></div></div>
-    <div class="fgroup"><span>Operating mode</span><div class="seg" id="modeSeg"></div></div>
+  <div class="filters" role="group" aria-label="Display options">
+    <div class="fgroup"><span id="viewLbl">View</span><div class="seg" id="viewSeg" role="group" aria-labelledby="viewLbl"></div></div>
     <div class="fgroup"><span id="fxLbl">Currency</span><select id="fxSel" aria-labelledby="fxLbl"></select>
       <span id="fxCustom" hidden><input id="fxCode" maxlength="3" placeholder="Code" aria-label="Currency code, three letters"><input id="fxRate" type="number" min="0" step="any" placeholder="per 1 USD" aria-label="Units of your currency per 1 US dollar"></span></div>
   </div>
   <p class="fxnote" id="fxNote"></p>
-  <p class="note" id="windNote" hidden></p>
 
-  <section class="hero" aria-live="polite">
-    <div>
-      <div class="lbl">Levelized cost of hydrogen, 20-year project</div>
-      <div class="big" id="lcoh"></div>
+  <div id="scenarioView">
+    <div class="filters" role="group" aria-label="Scenario filters">
+      <div class="fgroup"><span>Site</span><div class="seg" id="siteSeg"></div></div>
+      <div class="fgroup"><span>Operating mode</span><div class="seg" id="modeSeg"></div></div>
     </div>
-    <div class="chips" id="chips"></div>
-  </section>
+    <p class="note" id="windNote" hidden></p>
 
-  <section class="tiles" id="tiles"></section>
+    <section class="hero" aria-live="polite">
+      <div>
+        <div class="lbl">Levelized cost of hydrogen, 20-year project</div>
+        <div class="big" id="lcoh"></div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
 
-  <main class="grid" id="cards"></main>
+    <section class="tiles" id="tiles"></section>
 
-  <details id="assump">
-    <summary>Assumptions and limitations</summary>
-    <div class="cols" id="assumpCols"></div>
-    <ul class="lim" id="limits"></ul>
-  </details>
+    <main class="grid" id="cards"></main>
+
+    <details id="assump">
+      <summary>Assumptions and limitations</summary>
+      <div class="cols" id="assumpCols"></div>
+      <ul class="lim" id="limits"></ul>
+    </details>
+  </div>
+
+  <div id="liveView" hidden>
+    <div class="livebar">
+      <span class="pill" id="liveConn" role="status" data-state="connecting">Connecting</span>
+      <span class="pill tag" id="liveSource" hidden></span>
+      <span class="pill tag" id="liveReplay" hidden></span>
+      <span class="muted" id="liveLast"></span>
+    </div>
+    <p class="note" id="liveNote" hidden></p>
+
+    <section class="hero">
+      <div>
+        <div class="lbl" id="liveHeroLbl">Hydrogen production right now</div>
+        <div class="big" id="liveH2">&mdash;</div>
+      </div>
+      <div class="chips" id="liveChips"></div>
+    </section>
+
+    <section class="tiles" id="liveTiles"></section>
+
+    <main class="grid" id="liveCards"></main>
+  </div>
 </div>
 <div id="tip" hidden></div>
 
@@ -186,7 +223,7 @@ const MODE_HELP = {
 };
 const sites = [...new Set(D.scenarios.map(s => s.site))];
 const year = Number((/year (\d{4})/.exec(D.weatherSource || '') || [])[1]) || 2024;
-const state = { site: sites[0], mode: 'offgrid', week: 9 };
+const state = { site: sites[0], mode: 'offgrid', week: 9 , view: 'scenarios' };
 const find = (site, mode) => D.scenarios.find(s => s.site === site && s.modeKey === mode);
 const cur = () => find(state.site, state.mode) || D.scenarios[0];
 
@@ -503,7 +540,7 @@ function makeCard(id, title, opts = {}) {
   const foot = html('p', { class: 'foot' });
   const el = html('section', { class: 'card' + (opts.full ? ' full' : '') }, head, lg, plot, tbl, foot);
   tbtn.addEventListener('click', () => { const on = el.classList.toggle('as-table'); tbtn.setAttribute('aria-pressed', on); tbtn.textContent = on ? 'Chart' : 'Table'; hideTip(); });
-  $('#cards').append(el);
+  $(opts.into || '#cards').append(el);
   return cards[id] = { el, sub, lg, plot, tbl, foot, extra };
 }
 
@@ -738,6 +775,235 @@ function renderFilters() {
   mk($('#modeSeg'), MODE_ORDER.map(k => [k, MODE_SHORT[k]]), () => state.mode, k => state.mode = k);
 }
 
+// ---------- live plant (SignalR) ----------
+const LIVE_WINDOWS = [[300, '5 min'], [900, '15 min'], [3600, '1 hour']];
+const live = { started: false, plant: null, recs: [], ids: new Set(), win: 300, hover: false, conn: null, state: 'connecting', raf: 0, cap: 1300 };
+
+function setConn(state, text) {
+  live.state = state;
+  const el = $('#liveConn'); el.dataset.state = state; el.textContent = text;
+}
+function simClock(iso) {
+  return new Date(iso).toLocaleString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' UTC';
+}
+function setReplay(r) {
+  const el = $('#liveReplay');
+  if (!r) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = `Replaying ${r.site} ${r.source} weather: ${simClock(r.simulatedUtc)}, ${num(r.speedUp, 0)}\u00D7 speed`;
+}
+function liveNote(text) { const n = $('#liveNote'); n.hidden = !text; n.textContent = text || ''; }
+
+function normalize(r) {
+  let ts = String(r.timestamp);
+  if (!/(Z|[+-]\d\d:?\d\d)$/.test(ts)) ts += 'Z';   // treat timestamps without a zone as UTC
+  return { id: r.id, t: Date.parse(ts), kw: r.renewablePowerInputKw, h2: r.hydrogenProducedKgPerHour, water: r.waterConsumedLitersPerHour, cost: r.electricityCostPerHour, status: r.operationalStatus };
+}
+function addRecs(list) {
+  let added = false;
+  for (const raw of list) {
+    const r = normalize(raw);
+    if (!isFinite(r.t) || live.ids.has(r.id)) continue;
+    live.ids.add(r.id); live.recs.push(r); added = true;
+  }
+  if (!added) return;
+  live.recs.sort((a, b) => a.t - b.t);
+  while (live.recs.length > live.cap) live.ids.delete(live.recs.shift().id);
+  scheduleLive();
+}
+function scheduleLive() {
+  if (state.view !== 'live' || live.raf) return;
+  live.raf = requestAnimationFrame(() => { live.raf = 0; renderLive(); });
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('could not load ' + src));
+    document.head.append(s);
+  });
+}
+async function loadSignalR() {
+  if (window.signalR) return;
+  // Prefer the copy the API serves (works without internet); fall back to the CDN.
+  try { await loadScript('lib/signalr.min.js'); } catch (e) {}
+  if (!window.signalR) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js');
+}
+
+async function fetchHistory() {
+  const res = await fetch(`api/telemetry?limit=${live.cap}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('history request failed (' + res.status + ')');
+  addRecs(await res.json());
+}
+
+async function connectLive() {
+  setConn('connecting', 'Connecting');
+  try {
+    if (!live.plant) {
+      const r = await fetch('api/plant', { cache: 'no-store' });
+      if (!r.ok) throw new Error('plant request failed (' + r.status + ')');
+      live.plant = await r.json();
+      live.cap = Math.min(2000, Math.ceil(3600 / Math.max(1, live.plant.intervalSeconds)) + 60);
+      setReplay(live.plant.replay);
+      const tag = $('#liveSource'); tag.hidden = false;
+      tag.textContent = /^simulated$/i.test(live.plant.source) ? 'Simulated data, not a real plant' : 'Source: ' + live.plant.source;
+    }
+    await loadSignalR();
+    await fetchHistory();
+    const conn = new signalR.HubConnectionBuilder().withUrl(live.plant.hub).withAutomaticReconnect([0, 2000, 5000, 10000, 20000]).build();
+    conn.on('ReceiveTelemetry', rec => { addRecs([rec]); });
+    // The clock message follows its sample on the same connection, so it belongs to the newest record.
+    conn.on('ReplayClock', r => {
+      setReplay(r);
+      const newest = live.recs[live.recs.length - 1];
+      if (newest && !newest.sim) newest.sim = r.simulatedUtc;
+    });
+    conn.onreconnecting(() => setConn('reconnecting', 'Reconnecting'));
+    conn.onreconnected(async () => {
+      try { await conn.invoke('JoinPlantGroup', live.plant.plantId); await fetchHistory(); } catch (e) {}
+      setConn('live', 'Live'); liveNote('');
+    });
+    conn.onclose(() => { setConn('offline', 'Offline'); liveNote('The live connection was lost. Trying again in 10 seconds.'); setTimeout(connectLive, 10000); });
+    await conn.start();
+    await conn.invoke('JoinPlantGroup', live.plant.plantId);
+    live.conn = conn;
+    setConn('live', 'Live'); liveNote('');
+  } catch (e) {
+    setConn('offline', 'Offline');
+    liveNote('Could not reach the live feed: ' + (e && e.message ? e.message : e) + '. Check that the API is running. Trying again in 10 seconds.');
+    setTimeout(connectLive, 10000);
+  }
+}
+
+function startLive() {
+  if (live.started) return; live.started = true;
+  if (location.protocol === 'file:') {
+    setConn('offline', 'Not connected');
+    liveNote('This page was opened as a file. The live view works when the page is opened from the HydroPulse API (for example http://localhost:5196/ while the API is running), because the API serves the live data.');
+    return;
+  }
+  connectLive();
+}
+
+function buildLiveCards() {
+  const c = makeCard('live', 'Live operation', { full: true, into: '#liveCards' });
+  const seg = html('div', { class: 'seg', role: 'group', 'aria-label': 'Time window' });
+  LIVE_WINDOWS.forEach(([sec, label]) => {
+    const b = html('button', { type: 'button', text: label, 'aria-pressed': String(live.win === sec) });
+    b.addEventListener('click', () => { live.win = sec; [...seg.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderLive(true); });
+    seg.append(b);
+  });
+  c.extra.append(seg);
+  // Do not redraw under the cursor or while the chart has keyboard focus, or the tooltip would vanish every few seconds.
+  c.plot.addEventListener('pointerenter', () => { live.hover = true; });
+  c.plot.addEventListener('pointerleave', () => { live.hover = false; scheduleLive(); });
+  c.plot.addEventListener('focusin', () => { live.hover = true; });
+  c.plot.addEventListener('focusout', () => { live.hover = false; scheduleLive(); });
+}
+
+function ago(ms) { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; }
+function clock(t) { return new Date(t).toLocaleTimeString('en-GB'); }
+
+function renderLive(force) {
+  const rec = live.recs, c = cards.live, plant = live.plant;
+  const rated = plant ? plant.ratedPowerKw : 1000, every = plant ? plant.intervalSeconds : 3;
+  if (!rec.length) {
+    $('#liveH2').replaceChildren(document.createTextNode('—'));
+    $('#liveChips').replaceChildren(); $('#liveTiles').replaceChildren(); $('#liveLast').textContent = '';
+    c.plot.textContent = 'Waiting for the first sample.'; c.tbl.textContent = ''; c.lg.replaceChildren(); c.foot.textContent = '';
+    return;
+  }
+  const last = rec[rec.length - 1], tEnd = last.t, tStart = tEnd - live.win * 1000;
+  const win = rec.filter(r => r.t >= tStart);
+  const winLabel = LIVE_WINDOWS.find(w => w[0] === live.win)[1];
+
+  // hero and status
+  $('#liveH2').replaceChildren(document.createTextNode(num(last.h2, 1)), html('small', { text: 'kg per hour' }));
+  const idle = /standby/i.test(last.status);
+  $('#liveChips').replaceChildren(html('div', { class: 'chip ' + (idle ? 'idle' : 'ok') }, html('b', { text: idle ? '○' : '✓', 'aria-hidden': 'true' }), html('span', { text: last.status })));
+
+  // integrate over the window; cap each step so a connection gap does not count as production
+  let kg = 0, kwh = 0, covered = 0;
+  for (let i = 1; i < win.length; i++) {
+    const dt = Math.min((win[i].t - win[i - 1].t) / 1000, every * 2.5);
+    kg += win[i].h2 * dt / 3600; kwh += win[i].kw * dt / 3600; covered += dt;
+  }
+  const avgKw = covered > 0 ? kwh * 3600 / covered : last.kw;   // averaged over the time actually covered by samples
+  const tile = (l, v, sub) => html('div', { class: 'tile' }, html('div', { class: 'l', text: l }), html('div', { class: 'v', text: v }), html('div', { class: 's', text: sub }));
+  $('#liveTiles').replaceChildren(
+    tile('Renewable power input', num(last.kw, 0) + ' kW', `${pct(last.kw / rated)} of the ${num(rated, 0)} kW rating`),
+    tile('Water use', num(last.water, 0) + ' L/h', last.h2 > 0.001 ? `${num(last.water / last.h2, 1)} L per kg of hydrogen` : 'electrolyzer idle'),
+    tile('Electricity cost', money(last.cost) + '/h', 'at the plant tariff'),
+    tile('Hydrogen, last ' + winLabel, num(kg, 1) + ' kg', 'integrated from the samples'),
+    tile('Average power, last ' + winLabel, num(avgKw, 0) + ' kW', `${pct(avgKw / rated)} of the rating`));
+
+  if (!force && live.hover) return;
+
+  // chart: break the line where samples are missing
+  const xs = [], kw = [], h2 = [];
+  win.forEach((r, i) => {
+    if (i && r.t - win[i - 1].t > every * 2500) { xs.push((win[i - 1].t + every * 1000 - tEnd) / 1000); kw.push(null); h2.push(null); }
+    xs.push((r.t - tEnd) / 1000); kw.push(r.kw); h2.push(r.h2);
+  });
+  const tickStep = live.win / 5, durLabel = sec => sec % 60 === 0 ? (sec / 60) + ' min' : sec + ' s';
+  const narrow = c.plot.clientWidth < 520;
+  const xTicks = [0, 1, 2, 3, 4, 5].filter(k => !narrow || k % 2 === 1).map(k => ({ x: -live.win + k * tickStep, label: k === 5 ? 'now' : '−' + durLabel(live.win - k * tickStep) }));
+  const kwMax = Math.max(rated, ...win.map(r => r.kw)), h2Max = Math.max(1, ...win.map(r => r.h2)) * 1.05;
+  c.sub.textContent = `${plant ? plant.name : 'Plant'} · ${plant ? plant.source : ''} · last ${winLabel}, one sample every ${every} s · times in your local time`;
+  legend(c.lg, [{ name: 'Renewable power input', color: C.re, kind: 'line' }, { name: 'Hydrogen output', color: C.h2, kind: 'line' }]);
+  const idxAt = i => { // map a chart index (with inserted gap points) back to a sample
+    let n = -1; for (let k = 0; k <= i && k < xs.length; k++) if (kw[k] != null) n++; return win[Math.max(0, n)];
+  };
+  panelChart(c.plot, {
+    aria: 'Live renewable power input and hydrogen output',
+    xs, x0: -live.win, x1: 0, xTicks,
+    panels: [
+      { title: `Power (kW). Grey line: rating, ${num(rated, 0)} kW`, h: 170, yMax: kwMax, yFmt: v => num(v, 0), series: [{ name: 'Renewable power input', color: C.re, vals: kw, area: true }], ref: { v: rated } },
+      { title: 'Hydrogen output (kg/h)', h: 110, yMax: h2Max, yFmt: v => num(v, v < 10 && v % 1 ? 1 : 0), nt: 3, series: [{ name: 'Hydrogen output', color: C.h2, vals: h2, area: true }] }],
+    tipTitle: i => { const r = idxAt(i); return clock(r.t); },
+    tipRows: i => { const r = idxAt(i); return [
+      { color: C.re, value: num(r.kw, 0) + ' kW', label: 'Renewable power input' },
+      { color: C.h2, value: num(r.h2, 1) + ' kg/h', label: 'Hydrogen output' },
+      { color: 'var(--muted)', value: num(r.water, 0) + ' L/h', label: 'Water' },
+      { color: 'var(--muted)', value: money(r.cost) + '/h', label: 'Electricity cost' },
+      { color: 'var(--muted)', value: r.status, label: 'Status' },
+      ...(r.sim ? [{ color: 'var(--muted)', value: simClock(r.sim), label: 'Simulated time' }] : [])]; }
+  });
+  table(c.tbl, ['Time', 'Power kW', 'Hydrogen kg/h', 'Water L/h', `Electricity ${FX.code}/h`, 'Status'],
+    rec.slice(-100).reverse().map(r => [clock(r.t), num(r.kw, 0), num(r.h2, 1), num(r.water, 0), money(r.cost), r.status]));
+  c.foot.textContent = 'The chart pauses while you hover over it or step through it with the arrow keys, and catches up when you move away.';
+}
+
+// "last sample N s ago" ticker and stall warning
+setInterval(() => {
+  if (state.view !== 'live') return;
+  const el = $('#liveLast');
+  if (!live.recs.length) { el.textContent = ''; return; }
+  const age = Date.now() - live.recs[live.recs.length - 1].t, every = live.plant ? live.plant.intervalSeconds : 3;
+  // The server's clock can differ from this browser's, so only warn on a clearly large gap.
+  el.textContent = age > every * 4000 && age < 24 * 3600e3 ? `Last sample ${ago(age)} ago (no new data)` : `Last sample ${clock(live.recs[live.recs.length - 1].t)}`;
+}, 1000);
+
+// ---------- views ----------
+function setView(v, persist = true) {
+  state.view = v;
+  $('#scenarioView').hidden = v !== 'scenarios';
+  $('#liveView').hidden = v !== 'live';
+  [...$('#viewSeg').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (persist) { try { history.replaceState(null, '', v === 'live' ? '#live' : '#scenarios'); } catch (e) {} }
+  hideTip();
+  $('#src').textContent = v === 'live' ? 'Live telemetry from the plant over SignalR.' : `${D.weatherSource}. Generated ${new Date(D.generatedUtc).toISOString().slice(0, 10)}.`;
+  if (v === 'live') { startLive(); renderLive(true); } else renderAll();
+}
+function initViews() {
+  const seg = $('#viewSeg');
+  [['scenarios', 'Scenarios'], ['live', 'Live plant']].forEach(([k, label]) => {
+    const b = html('button', { type: 'button', text: label, 'aria-pressed': 'false' }); b.dataset.v = k;
+    b.addEventListener('click', () => setView(k)); seg.append(b);
+  });
+  setView(location.hash === '#live' ? 'live' : 'scenarios', false);
+}
+
 // ---------- currency ----------
 const FXD = D.fx && D.fx.rates ? D.fx : null;
 const COMMON = ['USD','KES','EUR','GBP','ZAR','TZS','UGX','RWF','ETB','NGN','GHS','EGP','MAD','AED','SAR','INR','CNY','JPY','AUD','CAD','CHF','BRL','MXN','SEK','NOK'];
@@ -785,9 +1051,10 @@ function initCurrency() {
   else setCurrency(v, v === 'USD' ? 1 : (FXD ? FXD.rates[v] : 1));
   renderFxNote();
 }
-function redrawCharts() { renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }
+function redrawCharts() { if (state.view === 'live') { renderLive(true); return; } renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }
 
 function renderAll() {
+  if (state.view === 'live') { renderLive(true); return; }
   renderFilters(); renderSummary(); renderAssumptions(); renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado();
 }
 
@@ -804,7 +1071,7 @@ $('#theme').addEventListener('click', () => { ti = (ti + 1) % themes.length; app
 
 // ---------- boot ----------
 $('#src').textContent = `${D.weatherSource}. Generated ${new Date(D.generatedUtc).toISOString().slice(0, 10)}.`;
-applyTheme(); buildCards(); initCurrency(); renderAll();
+applyTheme(); buildCards(); buildLiveCards(); initCurrency(); renderAll(); initViews();
 let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { redrawCharts(); }, 120); }).observe(document.body);
 })();
 </script>
