@@ -934,6 +934,7 @@ function renderLive(force) {
     tile('Renewable power input', num(last.kw, 0) + ' kW', `${pct(last.kw / rated)} of the ${num(rated, 0)} kW rating`),
     tile('Water use', num(last.water, 0) + ' L/h', last.h2 > 0.001 ? `${num(last.water / last.h2, 1)} L per kg of hydrogen` : 'electrolyzer idle'),
     tile('Electricity cost', money(last.cost) + '/h', 'at the plant tariff'),
+    ...(plant && plant.tariffUsdPerKwh && last.h2 > 0.001 ? [tile('Energy per kg', num(last.cost / plant.tariffUsdPerKwh / last.h2, 1) + ' kWh', 'stack plus compression')] : []),
     tile('Hydrogen, last ' + winLabel, num(kg, 1) + ' kg', 'integrated from the samples'),
     tile('Average power, last ' + winLabel, num(avgKw, 0) + ' kW', `${pct(avgKw / rated)} of the rating`));
 

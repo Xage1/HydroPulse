@@ -26,6 +26,8 @@ public class PlantController : ControllerBase
         name = _configuration["Telemetry:PlantName"] ?? "Demo plant",
         ratedPowerKw = H2TelemetrySimulationWorker.RatedPowerKw,
         intervalSeconds = H2TelemetrySimulationWorker.IntervalSeconds,
+        tariffUsdPerKwh = H2TelemetrySimulationWorker.TariffUsdPerKwh,
+        compressionKwhPerKg = H2TelemetrySimulationWorker.CompressionKwhPerKg,
         // "Simulated" until a real SCADA/PLC source replaces the simulation worker. The dashboard shows this label.
         source = _configuration["Telemetry:Source"] ?? "Simulated",
         hub = "/hubs/telemetry",

@@ -16,6 +16,13 @@ public class H2TelemetrySimulationWorker : BackgroundService
     /// <summary>Rated electrolyzer power of the plant this worker simulates.</summary>
     public const double RatedPowerKw = 1000.0;
 
+    /// <summary>Electricity price used to turn consumption into a cost figure.</summary>
+    public const double TariffUsdPerKwh = 0.06;
+
+    /// <summary>Compression energy per kg of hydrogen, from the same default compression train as the scenario runner.</summary>
+    public static readonly double CompressionKwhPerKg = CompressionModel.EnergyKwhPerKg(
+        new CompressionParameters().InletBar, new CompressionParameters().OutletBar, new CompressionParameters().Stages);
+
     /// <summary>Seconds between telemetry samples.</summary>
     public const int IntervalSeconds = 3;
 
@@ -50,7 +57,6 @@ public class H2TelemetrySimulationWorker : BackgroundService
 
         var model = new ElectrolyzerModel(new ElectrolyzerParameters { RatedPowerKw = RatedPowerKw });
         var random = new Random();
-        const double tariffUsdPerKwh = 0.06;
         double operatingHours = 0.0;
 
         // With a replay, renewable power follows a real weather year through the PV/wind models,
@@ -67,8 +73,9 @@ public class H2TelemetrySimulationWorker : BackgroundService
                     ? plan.Replay.PowerKw(simulatedUtc)
                     : random.NextDouble() * 850 + 200;
 
-                var state = model.Evaluate(powerKw, operatingHours);
-                if (state.Mode != ElectrolyzerMode.Standby)
+                // The same dispatch the scenario runner uses, so live hydrogen includes the compressor's share of the power.
+                var plant = PlantDispatch.Run(model, powerKw, operatingHours, CompressionKwhPerKg);
+                if (plant.StackKw > 0)
                     operatingHours += Interval.TotalHours * speedUp;   // stack wear follows simulated time
 
                 var record = new TelemetryRecord(
@@ -76,10 +83,10 @@ public class H2TelemetrySimulationWorker : BackgroundService
                     StackId: StackId,
                     Timestamp: DateTime.UtcNow,
                     RenewablePowerInputKw: powerKw,
-                    HydrogenProducedKgPerHour: state.HydrogenKgPerHour,
-                    WaterConsumedLitersPerHour: state.WaterLitersPerHour,
-                    ElectricityCostPerHour: state.PowerUsedKw * tariffUsdPerKwh,
-                    OperationalStatus: Describe(state.Mode));
+                    HydrogenProducedKgPerHour: plant.H2KgPerHour,
+                    WaterConsumedLitersPerHour: plant.WaterLitersPerHour,
+                    ElectricityCostPerHour: plant.TotalKw * TariffUsdPerKwh,
+                    OperationalStatus: Describe(plant.Mode));
 
                 using (var scope = _scopeFactory.CreateScope())
                 {

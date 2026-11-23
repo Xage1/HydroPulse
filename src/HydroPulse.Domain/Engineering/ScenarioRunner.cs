@@ -13,8 +13,6 @@ namespace HydroPulse.Domain.Engineering;
 /// </summary>
 public static class ScenarioRunner
 {
-    private const int FixedPointIterations = 5;
-
     public static ScenarioResult Run(ScenarioConfig cfg, WeatherSeries weather)
     {
         if (cfg.Electrolyzer.RatedPowerKw <= 0)
@@ -192,7 +190,7 @@ public static class ScenarioRunner
                     break;
             }
 
-            var d = Dispatch(model, allowed, opHours, ec);
+            var d = PlantDispatch.Run(model, allowed, opHours, ec);
             double c = d.StackKw + d.CompressionKw;
 
             double import = 0.0;
@@ -263,36 +261,7 @@ public static class ScenarioRunner
         bank = 0.0;
     }
 
-    /// <summary>
-    /// Finds the stack power such that stack + compression demand fits the available power.
-    /// SEC depends weakly on load, so a short fixed-point iteration converges.
-    /// </summary>
-    private static Dispatched Dispatch(ElectrolyzerModel model, double availableKw, double opHours, double ec)
-    {
-        if (availableKw <= 0) return default;
-
-        var p = model.Parameters;
-        double rated = p.RatedPowerKw;
-        double minKw = rated * p.MinimumLoadFraction;
-
-        double ps = Math.Min(availableKw, rated);
-        for (int i = 0; i < FixedPointIterations; i++)
-        {
-            double sec = model.SpecificEnergy(ps / rated, opHours);
-            ps = Math.Min(rated, availableKw / (1.0 + ec / sec));
-        }
-
-        if (ps < minKw) return default;
-
-        var state = model.Evaluate(ps, opHours);
-        return new Dispatched(state.PowerUsedKw, state.HydrogenKgPerHour, state.WaterLitersPerHour,
-            state.HydrogenKgPerHour * ec);
-    }
-
     private static double SafeDiv(double a, double b) => b > 0 ? a / b : 0.0;
-
-    private readonly record struct Dispatched(
-        double StackKw, double H2KgPerHour, double WaterLitersPerHour, double CompressionKw);
 
     private sealed class YearResult
     {
