@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HydroPulse</title>
+<style>
+:root {
+  color-scheme: light;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.045);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --lo:#2a78d6; --hi:#e34948; --good:#006300; --crit:#d03b3b;
+  --on-fill:#ffffff; --on-s4:#0b0b0b;
+  --font: system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c;
+    --lo:#3987e5; --hi:#e66767; --good:#0ca30c; --crit:#d03b3b; --on-s4:#ffffff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.06);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c;
+  --lo:#3987e5; --hi:#e66767; --good:#0ca30c; --crit:#d03b3b; --on-s4:#ffffff;
+}
+
+* { box-sizing: border-box; }
+body { margin:0; background:var(--page); color:var(--ink); font-family:var(--font); font-size:14px; line-height:1.45; }
+.wrap { max-width:1180px; margin:0 auto; padding:20px 16px 56px; }
+header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px 16px; }
+header > div { flex:1 1 240px; min-width:0; }
+header > button { flex:none; }
+h1 { font-size:22px; font-weight:600; margin:0 0 2px; letter-spacing:-.01em; }
+h2 { font-size:15px; font-weight:600; margin:0; }
+.sub { color:var(--ink2); font-size:12.5px; margin:2px 0 0; }
+.muted { color:var(--muted); }
+button { font:inherit; color:inherit; cursor:pointer; }
+.ghost { background:none; border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12.5px; color:var(--ink2); }
+.ghost:hover { background:var(--wash); }
+.ghost:focus-visible, .seg button:focus-visible, input:focus-visible, svg:focus-visible { outline:2px solid var(--s1); outline-offset:2px; }
+
+.filters { display:flex; flex-wrap:wrap; gap:12px 28px; align-items:center; margin:18px 0 14px; }
+.fgroup { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.fgroup > span { font-size:12.5px; color:var(--muted); }
+.seg { display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface); }
+.seg button { background:none; border:0; padding:7px 12px; font-size:13px; color:var(--ink2); }
+.seg button + button { border-left:1px solid var(--border); }
+.seg button:hover { background:var(--wash); }
+.seg button[aria-pressed="true"] { background:var(--ink); color:var(--surface); font-weight:600; }
+
+.fgroup select, .fgroup input { font:inherit; font-size:13px; color:var(--ink); background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:6px 10px; max-width:100%; }
+.fgroup input#fxCode { width:5.4em; text-transform:uppercase; }
+.fgroup input#fxRate { width:8em; }
+.fxnote { font-size:12px; color:var(--muted); margin:-6px 0 14px; }
+.fxnote a { color:inherit; }
+.chip.idle b { color:var(--muted); }
+.livebar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin:0 0 14px; font-size:12.5px; }
+.pill { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--border); background:var(--surface); border-radius:999px; padding:3px 11px 3px 9px; color:var(--ink2); }
+.pill::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--muted); }
+.pill[data-state="live"]::before { background:var(--good); }
+.pill[data-state="connecting"]::before, .pill[data-state="reconnecting"]::before { background:var(--s4); }
+.pill[data-state="offline"]::before { background:var(--crit); }
+.pill.tag::before { display:none; }
+.pill.tag { border-color:var(--s4); color:var(--ink); padding:3px 11px; }
+.note { border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--ink2); margin:0 0 14px; }
+
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; min-width:0; }
+.card-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px 12px; margin-bottom:6px; }
+.card-head > div:first-child { flex:1 1 220px; min-width:0; }
+.legend { display:flex; flex-wrap:wrap; gap:4px 16px; margin:8px 0 6px; font-size:12.5px; color:var(--ink2); }
+.legend i { display:inline-block; vertical-align:middle; margin-right:6px; }
+.legend .rect { width:10px; height:10px; border-radius:2px; }
+.legend .line { width:14px; height:2px; border-radius:1px; }
+.plot { width:100%; }
+.plot svg { max-width:100%; }
+.card.as-table .plot, .card:not(.as-table) .tbl { display:none; }
+.tbl { max-height:340px; overflow:auto; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; font-size:12.5px; }
+th, td { padding:6px 10px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--grid); }
+th:first-child, td:first-child { text-align:left; }
+th { position:sticky; top:0; background:var(--surface); font-weight:600; color:var(--ink2); }
+.foot { font-size:12px; color:var(--muted); margin-top:8px; }
+
+.hero { display:flex; flex-wrap:wrap; gap:16px 40px; align-items:center; margin-bottom:14px; }
+.hero .big { font-size:56px; font-weight:600; letter-spacing:-.02em; line-height:1.05; }
+.hero .big small { font-size:18px; font-weight:500; color:var(--ink2); margin-left:6px; letter-spacing:0; }
+.hero .lbl { color:var(--ink2); font-size:13px; margin-bottom:4px; }
+.chips { display:flex; flex-direction:column; gap:8px; }
+.chip { display:flex; gap:8px; align-items:flex-start; font-size:13px; }
+.chip b { font-size:15px; line-height:1.2; }
+.chip.ok b { color:var(--good); }
+.chip.bad b { color:var(--crit); }
+
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:14px; }
+.tile { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+.tile .l { color:var(--ink2); font-size:12.5px; }
+.tile .v { font-size:24px; font-weight:600; letter-spacing:-.01em; margin-top:2px; }
+.tile .s { color:var(--muted); font-size:12px; margin-top:2px; }
+
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr)); gap:14px; }
+.grid .full { grid-column:1 / -1; }
+.weekctl { display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink2); }
+.weekctl input { width:min(240px,40vw); accent-color:var(--s1); }
+
+svg text { font-family:var(--font); }
+.axt { fill:var(--muted); font-size:11px; }
+.txt { fill:var(--ink); font-size:12px; }
+.txt2 { fill:var(--ink2); font-size:12px; }
+.txtb { fill:var(--ink); font-size:12px; font-weight:600; }
+
+#tip { position:fixed; z-index:20; pointer-events:none; background:var(--surface); color:var(--ink); border:1px solid var(--axis);
+  border-radius:8px; padding:8px 10px; font-size:12.5px; box-shadow:0 6px 20px rgba(0,0,0,.14); max-width:270px; }
+#tip .tt { color:var(--ink2); margin-bottom:4px; }
+#tip .tr { display:flex; align-items:center; gap:8px; padding:1px 0; }
+#tip .key { width:14px; height:2px; border-radius:1px; flex:none; }
+#tip .key.none { background:none; }
+#tip .tv { font-weight:600; }
+#tip .tl { color:var(--ink2); }
+
+details { margin-top:18px; }
+summary { cursor:pointer; font-weight:600; font-size:13.5px; }
+.cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px 28px; margin-top:10px; }
+.cols h3 { font-size:12.5px; margin:0 0 4px; color:var(--ink2); font-weight:600; }
+.cols dl { margin:0; display:grid; grid-template-columns:1fr auto; gap:2px 12px; font-size:12.5px; }
+.cols dt { color:var(--ink2); } .cols dd { margin:0; text-align:right; }
+ul.lim { margin:8px 0 0; padding-left:18px; font-size:12.5px; color:var(--ink2); }
+@media (max-width:560px) { .hero .big { font-size:48px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>HydroPulse</h1>
+      <p class="sub" id="src"></p>
+    </div>
+    <button class="ghost" id="theme" type="button" aria-label="Change colour theme">Theme: auto</button>
+  </header>
+
+  <div class="filters" role="group" aria-label="Display options">
+    <div class="fgroup"><span id="viewLbl">View</span><div class="seg" id="viewSeg" role="group" aria-labelledby="viewLbl"></div></div>
+    <div class="fgroup"><span id="fxLbl">Currency</span><select id="fxSel" aria-labelledby="fxLbl"></select>
+      <span id="fxCustom" hidden><input id="fxCode" maxlength="3" placeholder="Code" aria-label="Currency code, three letters"><input id="fxRate" type="number" min="0" step="any" placeholder="per 1 USD" aria-label="Units of your currency per 1 US dollar"></span></div>
+  </div>
+  <p class="fxnote" id="fxNote"></p>
+
+  <div id="scenarioView">
+    <div class="filters" role="group" aria-label="Scenario filters">
+      <div class="fgroup"><span>Site</span><div class="seg" id="siteSeg"></div></div>
+      <div class="fgroup"><span>Operating mode</span><div class="seg" id="modeSeg"></div></div>
+    </div>
+    <p class="note" id="windNote" hidden></p>
+
+    <section class="hero" aria-live="polite">
+      <div>
+        <div class="lbl">Levelized cost of hydrogen, 20-year project</div>
+        <div class="big" id="lcoh"></div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="tiles" id="tiles"></section>
+
+    <main class="grid" id="cards"></main>
+
+    <details id="assump">
+      <summary>Assumptions and limitations</summary>
+      <div class="cols" id="assumpCols"></div>
+      <ul class="lim" id="limits"></ul>
+    </details>
+  </div>
+
+  <div id="liveView" hidden>
+    <div class="livebar">
+      <span class="pill" id="liveConn" role="status" data-state="connecting">Connecting</span>
+      <span class="pill tag" id="liveSource" hidden></span>
+      <span class="pill tag" id="liveReplay" hidden></span>
+      <span class="muted" id="liveLast"></span>
+    </div>
+    <p class="note" id="liveNote" hidden></p>
+
+    <section class="hero">
+      <div>
+        <div class="lbl" id="liveHeroLbl">Hydrogen production right now</div>
+        <div class="big" id="liveH2">&mdash;</div>
+      </div>
+      <div class="chips" id="liveChips"></div>
+    </section>
+
+    <section class="tiles" id="liveTiles"></section>
+
+    <main class="grid" id="liveCards"></main>
+  </div>
+</div>
+<div id="tip" hidden></div>
+
+<script id="results-data" type="application/json">__RESULTS_JSON__</script>
+<script>
+(() => {
+'use strict';
+
+// ---------- data ----------
+let D;
+try { D = JSON.parse(document.getElementById('results-data').textContent); }
+catch (e) {
+  document.querySelector('.wrap').innerHTML = '<p class="note">No results embedded. Run the scenario runner to generate this page.</p>';
+  return;
+}
+const MODE_ORDER = ['offgrid', 'none', 'monthly', 'hourly'];
+const MODE_SHORT = { offgrid:'Off-grid', none:'Grid, no matching', monthly:'Grid, monthly matching', hourly:'Grid, hourly matching' };
+const MODE_HELP = {
+  offgrid:'Islanded: the electrolyzer runs only on on-site generation.',
+  none:'Grid power is imported whenever the tariff is acceptable. Hydrogen is not certifiable as renewable.',
+  monthly:'Grid import limited to surplus banked earlier in the same month (EU rule until 2029).',
+  hourly:'Consumption cannot exceed the same hour\'s renewable generation (EU rule from 2030).'
+};
+const sites = [...new Set(D.scenarios.map(s => s.site))];
+const year = Number((/year (\d{4})/.exec(D.weatherSource || '') || [])[1]) || 2024;
+const state = { site: sites[0], mode: 'offgrid', week: 9 , view: 'scenarios' };
+const find = (site, mode) => D.scenarios.find(s => s.site === site && s.modeKey === mode);
+const cur = () => find(state.site, state.mode) || D.scenarios[0];
+
+// ---------- small helpers ----------
+const $ = (s, r = document) => r.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+function svgEl(name, attrs, parent) {
+  const e = document.createElementNS(NS, name);
+  for (const k in (attrs || {})) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function html(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in (props || {})) {
+    if (k === 'class') e.className = props[k];
+    else if (k === 'text') e.textContent = props[k];
+    else e.setAttribute(k, props[k]);
+  }
+  kids.forEach(c => c != null && e.append(c));
+  return e;
+}
+const num = (v, d = 0) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// Display currency. The model runs in US dollars; conversion happens only when values are shown.
+const FX = { code: 'USD', rate: 1 };
+function sym() {
+  if (FX.code === 'USD') return '$';
+  try {
+    const p = new Intl.NumberFormat('en', { style: 'currency', currency: FX.code, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find(x => x.type === 'currency');
+    const t = p ? p.value : FX.code;
+    return /^[A-Za-z]/.test(t) ? t + ' ' : t;
+  } catch (e) { return FX.code + ' '; }
+}
+const money = (v, d = 2) => { if (v == null) return 'n/a'; const x = v * FX.rate; return sym() + num(x, Math.abs(x) >= 100 ? 0 : d); };
+function axisMoney(t) {
+  const d = Math.abs(t) >= 100 || Number.isInteger(t) ? 0 : Math.abs(t * 10 - Math.round(t * 10)) < 1e-6 ? 1 : 2;
+  return sym() + num(t, d);
+}
+function bigMoney(v) {
+  const x = v * FX.rate, a = Math.abs(x);
+  return sym() + (a >= 1e9 ? num(x / 1e9, 1) + 'B' : num(x / 1e6, a >= 1e8 ? 0 : 1) + 'M');
+}
+const pct = (v, d = 0) => num(v * 100, d) + '%';
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function niceScale(min, max, n = 4) {
+  const span = (max - min) || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag, step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const lo = Math.floor(min / step + 1e-9) * step, hi = Math.ceil(max / step - 1e-9) * step, ticks = [];
+  for (let t = lo; t <= hi + step / 2; t += step) ticks.push(Math.round(t / step * 1e6) / 1e6 * step);
+  return { min: lo, max: hi, ticks };
+}
+function path(pts) { return pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''); }
+function rrect(x, y, w, h, r) {
+  const { tl = 0, tr = 0, br = 0, bl = 0 } = r;
+  const a = (rad, ex, ey) => rad ? `A${rad},${rad} 0 0 1 ${ex},${ey}` : '';
+  return `M${x + tl},${y} H${x + w - tr} ${a(tr, x + w, y + tr)} V${y + h - br} ${a(br, x + w - br, y + h)} H${x + bl} ${a(bl, x, y + h - bl)} V${y + tl} ${a(tl, x + tl, y)} Z`;
+}
+function sty(e, o) { for (const k in o) e.style[k] = o[k]; return e; }
+
+// tooltip (values lead, labels follow; textContent only)
+const tip = $('#tip');
+function showTip(x, y, title, rows) {
+  tip.replaceChildren();
+  if (title) tip.append(html('div', { class: 'tt', text: title }));
+  rows.forEach(r => {
+    const key = html('span', { class: 'key' + (r.color ? '' : ' none') });
+    if (r.color) key.style.background = r.color;
+    tip.append(html('div', { class: 'tr' }, key, html('span', { class: 'tv', text: r.value }), html('span', { class: 'tl', text: r.label })));
+  });
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = x + 14, top = y + 14;
+  if (left + w > innerWidth - 8) left = x - w - 14;
+  if (top + h > innerHeight - 8) top = y - h - 14;
+  tip.style.left = Math.max(8, left) + 'px';
+  tip.style.top = Math.max(8, top) + 'px';
+}
+const hideTip = () => { tip.hidden = true; };
+
+function legend(box, items) {
+  box.replaceChildren();
+  items.forEach(it => {
+    const sw = html('i', { class: it.kind || 'rect' });
+    sw.style.background = it.color;
+    box.append(html('span', null, sw, it.name));
+  });
+}
+function table(box, cols, rows) {
+  const t = html('table');
+  t.append(html('thead', null, html('tr', null, ...cols.map(c => html('th', { text: c })))));
+  t.append(html('tbody', null, ...rows.map(r => html('tr', null, ...r.map(c => html('td', { text: String(c) }))))));
+  box.replaceChildren(t);
+}
+function mount(box, h) {
+  const W = Math.max(280, Math.floor(box.clientWidth));
+  box.replaceChildren();
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${h}`, width: W, height: h }, box);
+  svg.style.display = 'block';
+  return { svg, W };
+}
+
+// ---------- charts ----------
+// Multi-panel line/area chart with a shared crosshair and tooltip.
+function panelChart(box, o) {
+  const ml = o.ml ?? 48, mr = 14, titleH = 16, gap = 14, axisH = 22;
+  const H = o.panels.reduce((a, p) => a + p.h + titleH, 0) + gap * (o.panels.length - 1) + axisH + 4;
+  const { svg, W } = mount(box, H);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria); svg.setAttribute('tabindex', '0');
+  const pw = W - ml - mr, xs = o.xs;
+  const px = x => ml + (x - o.x0) / (o.x1 - o.x0) * pw;
+  let y = 2; const P = [];
+
+  o.panels.forEach(p => {
+    const top = y + titleH, bot = top + p.h;
+    const sc = niceScale(p.yMin ?? 0, p.yMax, p.nt || 4);
+    const py = v => bot - (v - sc.min) / (sc.max - sc.min) * p.h;
+    svgEl('text', { x: ml, y: y + 11, class: 'txt2' }, svg).textContent = p.title;
+    sc.ticks.forEach(t => {
+      sty(svgEl('line', { x1: ml, x2: W - mr, y1: py(t), y2: py(t) }, svg), { stroke: t === sc.min ? 'var(--axis)' : 'var(--grid)', strokeWidth: 1 });
+      const tx = svgEl('text', { x: ml - 8, y: py(t) + 4, 'text-anchor': 'end', class: 'axt' }, svg);
+      tx.textContent = p.yFmt(t);
+    });
+    if (p.ref) {
+      // reference line (named in the panel title, never labelled on top of the data)
+      sty(svgEl('line', { x1: ml, x2: W - mr, y1: py(p.ref.v), y2: py(p.ref.v) }, svg), { stroke: 'var(--muted)', strokeWidth: 1.5 });
+    }
+    p.series.forEach(s => {
+      const segs = []; let cur = [];
+      s.vals.forEach((v, i) => { if (v == null) { if (cur.length) segs.push(cur); cur = []; } else cur.push([px(xs[i]), py(v)]); });
+      if (cur.length) segs.push(cur);
+      segs.forEach(seg => {
+        if (s.area && seg.length > 1) {
+          const d = path(seg) + `L${seg[seg.length - 1][0].toFixed(1)},${py(sc.min)}L${seg[0][0].toFixed(1)},${py(sc.min)}Z`;
+          sty(svgEl('path', { d }, svg), { fill: s.color, fillOpacity: .10, stroke: 'none' });
+        }
+        sty(svgEl('path', { d: path(seg) }, svg), { fill: 'none', stroke: s.color, strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' });
+        if (o.markers) seg.forEach(pt => sty(svgEl('circle', { cx: pt[0], cy: pt[1], r: 4 }, svg), { fill: s.color, stroke: 'var(--surface)', strokeWidth: 2 }));
+      });
+    });
+    P.push({ p, py, top, bot });
+    y = bot + gap;
+  });
+
+  const plotTop = P[0].top, plotBot = P[P.length - 1].bot;
+  (o.xTicks || []).forEach(t => {
+    const x = px(t.x), edge = x < ml + 14 ? 'start' : x > W - mr - 14 ? 'end' : 'middle';
+    svgEl('text', { x, y: plotBot + 16, 'text-anchor': edge, class: 'axt' }, svg).textContent = t.label;
+  });
+  (o.direct || []).forEach(d => {
+    const pp = P[d.panel], v = o.panels[d.panel].series[d.s].vals[d.i];
+    if (v == null) return;
+    const x = px(xs[d.i]) + (d.dx || 8), yy = pp.py(v) + (d.dy || -8);
+    sty(svgEl('circle', { cx: x + 4, cy: yy - 4, r: 4 }, svg), { fill: o.panels[d.panel].series[d.s].color });
+    svgEl('text', { x: x + 12, y: yy, class: 'txt2' }, svg).textContent = d.text;
+  });
+  if (o.highlight) {
+    const h = o.highlight, s = o.panels[0].series[0], v = s.vals[h.i], x = px(xs[h.i]), yy = P[0].py(v);
+    sty(svgEl('circle', { cx: x, cy: yy, r: 7 }, svg), { fill: s.color, stroke: 'var(--surface)', strokeWidth: 2 });
+    const t = svgEl('text', { x: Math.min(Math.max(x, ml + 70), W - mr - 70), y: yy + 26, 'text-anchor': 'middle', class: 'txtb' }, svg);
+    t.textContent = h.text;
+  }
+
+  // crosshair
+  const vline = sty(svgEl('line', { y1: plotTop, y2: plotBot }, svg), { stroke: 'var(--axis)', strokeWidth: 1, display: 'none' });
+  const dots = P.map(pp => pp.p.series.map(s => sty(svgEl('circle', { r: 4 }, svg), { fill: s.color, stroke: 'var(--surface)', strokeWidth: 2, display: 'none' })));
+  const hit = sty(svgEl('rect', { x: ml, y: plotTop, width: pw, height: plotBot - plotTop }, svg), { fill: 'transparent', cursor: 'crosshair' });
+  let idx = 0;
+  function nearest(x) { let b = 0, bd = Infinity; for (let i = 0; i < xs.length; i++) { const d = Math.abs(xs[i] - x); if (d < bd) { bd = d; b = i; } } return b; }
+  function setCursor(i, cx, cy) {
+    idx = i; const x = px(xs[i]);
+    vline.setAttribute('x1', x); vline.setAttribute('x2', x); vline.style.display = '';
+    P.forEach((pp, k) => pp.p.series.forEach((s, j) => {
+      const v = s.vals[i], d = dots[k][j];
+      if (v == null) { d.style.display = 'none'; return; }
+      d.setAttribute('cx', x); d.setAttribute('cy', pp.py(v)); d.style.display = '';
+    }));
+    showTip(cx, cy, o.tipTitle(i), o.tipRows(i));
+  }
+  function clear() { vline.style.display = 'none'; dots.forEach(r => r.forEach(d => d.style.display = 'none')); hideTip(); }
+  hit.addEventListener('pointermove', e => {
+    const r = svg.getBoundingClientRect(), x = o.x0 + ((e.clientX - r.left) * (W / r.width) - ml) / pw * (o.x1 - o.x0);
+    setCursor(nearest(x), e.clientX, e.clientY);
+  });
+  hit.addEventListener('pointerleave', clear);
+  svg.addEventListener('blur', clear);
+  svg.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const n = Math.min(xs.length - 1, Math.max(0, idx + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 6 : 1)));
+    const r = svg.getBoundingClientRect();
+    setCursor(n, r.left + px(xs[n]) * (r.width / W), r.top + 30);
+  });
+}
+
+// Grouped columns by category (monthly energy).
+function columnChart(box, o) {
+  const ml = 52, mr = 10, mt = 8, axisH = 22, H = o.h;
+  const { svg, W } = mount(box, H);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria);
+  const pw = W - ml - mr, ph = H - mt - axisH;
+  const sc = niceScale(0, o.yMax, 4), py = v => mt + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+  sc.ticks.forEach(t => {
+    sty(svgEl('line', { x1: ml, x2: W - mr, y1: py(t), y2: py(t) }, svg), { stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', strokeWidth: 1 });
+    svgEl('text', { x: ml - 8, y: py(t) + 4, 'text-anchor': 'end', class: 'axt' }, svg).textContent = o.yFmt(t);
+  });
+  const n = o.groups.length, band = pw / n, k = o.series.length;
+  const bw = Math.max(3, Math.min(24, (band * 0.78 - (k - 1) * 2) / k));
+  const bands = [];
+  o.groups.forEach((g, gi) => {
+    const gx = ml + gi * band, total = k * bw + (k - 1) * 2, x0 = gx + (band - total) / 2;
+    const wash = sty(svgEl('rect', { x: gx + 1, y: mt, width: band - 2, height: ph, rx: 6 }, svg), { fill: 'var(--wash)', display: 'none' });
+    bands.push(wash);
+    o.series.forEach((s, si) => {
+      const v = g.values[si] || 0, h = Math.max(0, ph - (py(v) - mt) - (ph - (py(0) - mt)));
+      if (v <= 0) return;
+      const bh = py(0) - py(v), r = Math.min(4, bh / 2);
+      sty(svgEl('path', { d: rrect(x0 + si * (bw + 2), py(v), bw, bh, { tl: r, tr: r }) }, svg), { fill: s.color });
+    });
+    svgEl('text', { x: gx + band / 2, y: H - 6, 'text-anchor': 'middle', class: 'axt' }, svg).textContent = g.label;
+    const hit = sty(svgEl('rect', { x: gx, y: mt, width: band, height: ph + axisH, tabindex: 0 }, svg), { fill: 'transparent' });
+    const on = e => { bands.forEach(b => b.style.display = 'none'); wash.style.display = ''; const r = hit.getBoundingClientRect(); showTip(e.clientX ?? r.left + r.width / 2, e.clientY ?? r.top + 20, o.tipTitle(gi), o.tipRows(gi)); };
+    hit.addEventListener('pointermove', on); hit.addEventListener('focus', on);
+    const off = () => { wash.style.display = 'none'; hideTip(); };
+    hit.addEventListener('pointerleave', off); hit.addEventListener('blur', off);
+  });
+}
+
+// Horizontal stacked bars, one row per operating mode.
+function stackedBars(box, o) {
+  const rowH = 58, axisH = 24, pad = 8, H = o.rows.length * rowH + axisH + pad;
+  const { svg, W } = mount(box, H);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria);
+  const maxTot = Math.max(...o.rows.map(r => r.total || 0)), xl = 2, xr = W - Math.max(64, money(maxTot).length * 7.5 + 14), pw = xr - xl;
+  const sc = niceScale(0, Math.max(...o.rows.map(r => r.total || 0)) * FX.rate * 1.02, 4), px = v => xl + v / sc.max * pw;
+  sc.ticks.forEach(t => {
+    sty(svgEl('line', { x1: px(t), x2: px(t), y1: pad, y2: H - axisH }, svg), { stroke: t === 0 ? 'var(--axis)' : 'var(--grid)', strokeWidth: 1 });
+    svgEl('text', { x: px(t), y: H - 6, 'text-anchor': t === 0 ? 'start' : 'middle', class: 'axt' }, svg).textContent = axisMoney(t);
+  });
+  o.rows.forEach((r, ri) => {
+    const top = pad + ri * rowH, barY = top + 24;
+    const g = svgEl('g', { role: 'button', tabindex: 0, 'aria-label': `${r.label}: ${money(r.total)} per kg${r.selected ? ' (selected)' : ''}` }, svg);
+    g.style.cursor = 'pointer';
+    if (r.selected) sty(svgEl('rect', { x: 0, y: top, width: W, height: rowH - 4, rx: 8 }, g), { fill: 'var(--wash)' });
+    svgEl('text', { x: 8, y: top + 17, class: r.selected ? 'txtb' : 'txt' }, g).textContent = r.label;
+    const segs = r.segments.filter(s => s.value > 0.0005);
+    let x = px(0);
+    segs.forEach((s, si) => {
+      const w = s.value * FX.rate / sc.max * pw, last = si === segs.length - 1, dw = Math.max(0, w - (last ? 0 : 2));
+      const p = sty(svgEl('path', { d: rrect(x + 8 * 0, barY, dw, 20, last ? { tr: 4, br: 4 } : {}) }, g), { fill: s.color });
+      const lab = money(s.value);
+      if (dw > lab.length * 6.8 + 14) {
+        const t = svgEl('text', { x: x + 7, y: barY + 14, class: 'axt' }, g); t.textContent = lab;
+        sty(t, { fill: s.onColor || 'var(--on-fill)', fontSize: '11px', fontWeight: 600 });
+      }
+      const over = e => showTip(e.clientX, e.clientY, r.label, [
+        { color: s.color, value: money(s.value), label: s.name + ' · ' + pct(s.value / r.total) },
+        { color: null, value: money(r.total), label: 'Total LCOH per kg' }]);
+      p.addEventListener('pointermove', over); p.addEventListener('pointerleave', hideTip);
+      x += w;
+    });
+    svgEl('text', { x: x + 8, y: barY + 15, class: 'txtb' }, g).textContent = money(r.total);
+    g.addEventListener('click', () => r.onClick());
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.onClick(); } });
+  });
+}
+
+// Tornado: change in LCOH from one-at-a-time parameter changes.
+function tornado(box, o) {
+  const rowH = 50, axisH = 24, pad = 6, H = o.rows.length * rowH + axisH + pad;
+  const { svg, W } = mount(box, H);
+  svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', o.aria);
+  const widest = Math.max(...o.rows.flatMap(r => r.items.map(i => money(i.value).length))), labelPad = Math.max(84, widest * 7 + 52), xl = labelPad, xr = W - labelPad;
+  const maxD = Math.max(0.01, ...o.rows.flatMap(r => r.items.map(i => Math.abs(i.value - o.base))));
+  const sc = niceScale((o.base - maxD) * FX.rate, (o.base + maxD) * FX.rate, 4), px = v => xl + (v * FX.rate - sc.min) / (sc.max - sc.min) * (xr - xl);
+  // thin the axis labels when the currency's numbers are wide
+  const skip = Math.max(1, Math.ceil((axisMoney(sc.max).length * 6.6 + 14) / ((xr - xl) / Math.max(1, sc.ticks.length - 1))));
+  sc.ticks.forEach((t, ti) => {
+    sty(svgEl('line', { x1: px(t / FX.rate), x2: px(t / FX.rate), y1: pad, y2: H - axisH }, svg), { stroke: 'var(--grid)', strokeWidth: 1 });
+    if (ti % skip === 0) svgEl('text', { x: px(t / FX.rate), y: H - 6, 'text-anchor': 'middle', class: 'axt' }, svg).textContent = axisMoney(t);
+  });
+  sty(svgEl('line', { x1: px(o.base), x2: px(o.base), y1: pad, y2: H - axisH }, svg), { stroke: 'var(--axis)', strokeWidth: 1 });
+  o.rows.forEach((r, ri) => {
+    const top = pad + ri * rowH, barY = top + 22;
+    svgEl('text', { x: 4, y: top + 15, class: 'txt' }, svg).textContent = r.name;
+    r.items.forEach(it => {
+      const d = it.value - o.base;
+      if (Math.abs(d) < 0.005) {
+        const t = svgEl('text', { x: px(o.base) + (it === r.items[0] ? -6 : 6), y: barY + 13, 'text-anchor': it === r.items[0] ? 'end' : 'start', class: 'axt' }, svg);
+        t.textContent = it.label + ': no effect'; return;
+      }
+      const right = d > 0, x = right ? px(o.base) : px(it.value), w = Math.abs(px(it.value) - px(o.base));
+      const bar = sty(svgEl('path', { d: rrect(x, barY, w, 16, right ? { tr: 4, br: 4 } : { tl: 4, bl: 4 }) }, svg), { fill: right ? 'var(--hi)' : 'var(--lo)' });
+      const t = svgEl('text', { x: right ? x + w + 6 : x - 6, y: barY + 12, 'text-anchor': right ? 'start' : 'end', class: 'txt2' }, svg);
+      t.textContent = `${it.label} → ${money(it.value)}`;
+      bar.addEventListener('pointermove', e => showTip(e.clientX, e.clientY, r.name, [
+        { color: right ? 'var(--hi)' : 'var(--lo)', value: (d > 0 ? '+' : '−') + money(Math.abs(d)), label: `${it.label} → ${money(it.value)} per kg` }]));
+      bar.addEventListener('pointerleave', hideTip);
+    });
+  });
+}
+
+// ---------- cards ----------
+const cards = {};
+function makeCard(id, title, opts = {}) {
+  const sub = html('p', { class: 'sub' });
+  const tbtn = html('button', { class: 'ghost', type: 'button', 'aria-pressed': 'false', text: 'Table' });
+  const extra = html('div', { class: 'extra' });
+  const head = html('div', { class: 'card-head' }, html('div', null, html('h2', { text: title }), sub), html('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end' }, extra, tbtn));
+  const lg = html('div', { class: 'legend' });
+  const plot = html('div', { class: 'plot' });
+  const tbl = html('div', { class: 'tbl' });
+  const foot = html('p', { class: 'foot' });
+  const el = html('section', { class: 'card' + (opts.full ? ' full' : '') }, head, lg, plot, tbl, foot);
+  tbtn.addEventListener('click', () => { const on = el.classList.toggle('as-table'); tbtn.setAttribute('aria-pressed', on); tbtn.textContent = on ? 'Chart' : 'Table'; hideTip(); });
+  $(opts.into || '#cards').append(el);
+  return cards[id] = { el, sub, lg, plot, tbl, foot, extra };
+}
+
+function buildCards() {
+  const w = makeCard('week', 'A week of operation', { full: true });
+  const range = html('input', { type: 'range', min: 1, max: 52, step: 1, value: state.week, 'aria-label': 'Week of the year' });
+  const wl = html('span', { id: 'weekLabel' });
+  w.extra.append(html('label', { class: 'weekctl' }, 'Week', range, wl));
+  range.addEventListener('input', () => { state.week = Number(range.value); renderWeek(); });
+  w.range = range;
+
+  makeCard('monthly', 'Energy by month');
+  makeCard('modes', 'What each operating mode costs');
+  makeCard('sweep', 'Sizing: how much renewable capacity?');
+  makeCard('duration', 'Power duration curve');
+  makeCard('tornado', 'What moves the cost');
+}
+
+const C = { re: 'var(--s1)', el: 'var(--s2)', grid: 'var(--s3)', other: 'var(--s4)', opex: 'var(--s5)', h2: 'var(--s6)' };
+
+function renderWeek() {
+  const s = cur(), h = s.result.hourly, n = h.renewableKw.length, nW = Math.floor(n / 168);
+  const wk = Math.min(state.week, nW), a = (wk - 1) * 168;
+  const sl = arr => arr.slice(a, a + 168);
+  const re = sl(h.renewableKw).map(v => v / 1000), el = sl(h.electrolyzerKw).map(v => v / 1000), gi = sl(h.gridImportKw).map(v => v / 1000), h2 = sl(h.hydrogenKgPerHour);
+  const hasImport = h.gridImportKw.some(v => v > 0);
+  const gmax = Math.max(...h.renewableKw, ...h.electrolyzerKw) / 1000, hmax = Math.max(...h.hydrogenKgPerHour);
+  const t0 = Date.UTC(year, 0, 1) + a * 3600000, at = i => new Date(t0 + i * 3600000);
+  const dfmt = (d, o) => d.toLocaleDateString('en-GB', Object.assign({ timeZone: 'UTC' }, o));
+  const c = cards.week, narrow = c.plot.clientWidth < 520;
+  c.sub.textContent = `${s.site} · ${MODE_SHORT[s.modeKey]} · times in UTC (Nairobi is UTC+3)`;
+  $('#weekLabel').textContent = `${wk} · ${dfmt(at(0), { day: 'numeric', month: 'short' })} – ${dfmt(at(167), { day: 'numeric', month: 'short' })}`;
+  legend(c.lg, [
+    { name: 'Renewable generation', color: C.re },
+    { name: 'Electrolyzer demand (incl. compression)', color: C.el },
+    ...(hasImport ? [{ name: 'Grid import', color: C.grid }] : []),
+    { name: 'Hydrogen output', color: C.h2 }].map(i => Object.assign(i, { kind: 'line' })));
+  const rated = s.result.plant.electrolyzerMw;
+  const series0 = [{ name: 'Renewable generation', color: C.re, vals: re, area: true }, { name: 'Electrolyzer demand', color: C.el, vals: el }];
+  if (hasImport) series0.push({ name: 'Grid import', color: C.grid, vals: gi });
+  panelChart(c.plot, {
+    aria: `Renewable generation, electrolyzer demand and hydrogen output for week ${wk}`,
+    xs: re.map((_, i) => i), x0: 0, x1: 167,
+    xTicks: [0, 1, 2, 3, 4, 5, 6].map(d => ({ x: d * 24, label: dfmt(at(d * 24), narrow ? { weekday: 'short' } : { weekday: 'short', day: 'numeric' }) })),
+    panels: [
+      { title: `Power (MW). Grey line: electrolyzer rating, ${num(rated, 0)} MW`, h: 190, yMax: Math.max(gmax, rated), yFmt: v => num(v, v % 1 ? 1 : 0), series: series0, ref: { v: rated } },
+      { title: 'Hydrogen (kg/h)', h: 110, yMax: hmax, yFmt: v => num(v, 0), nt: 3, series: [{ name: 'Hydrogen', color: C.h2, vals: h2, area: true }] }],
+    tipTitle: i => dfmt(at(i), { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + String(at(i).getUTCHours()).padStart(2, '0') + ':00 UTC',
+    tipRows: i => [
+      { color: C.re, value: num(re[i], 2) + ' MW', label: 'Renewable generation' },
+      { color: C.el, value: num(el[i], 2) + ' MW', label: 'Electrolyzer demand' },
+      ...(hasImport ? [{ color: C.grid, value: num(gi[i], 2) + ' MW', label: 'Grid import' }] : []),
+      { color: C.h2, value: num(h2[i], 0) + ' kg/h', label: 'Hydrogen' }]
+  });
+  table(c.tbl, ['Time (UTC)', 'Renewable MW', 'Electrolyzer MW', ...(hasImport ? ['Grid import MW'] : []), 'Hydrogen kg/h'],
+    re.map((_, i) => [at(i).toISOString().slice(0, 16).replace('T', ' '), num(re[i], 2), num(el[i], 2), ...(hasImport ? [num(gi[i], 2)] : []), num(h2[i], 0)]));
+  c.foot.textContent = 'Drag the week slider to browse the year. Scales stay fixed so weeks are comparable. Use the arrow keys on the chart to step through hours.';
+}
+
+function renderMonthly() {
+  const s = cur(), m = s.result.monthly, c = cards.monthly, hasImport = m.some(x => x.gridImportMwh > 0.5);
+  c.sub.textContent = 'Renewable generation against what the electrolyzer uses, MWh';
+  const series = [{ name: 'Renewable generation', color: C.re }, { name: 'Electrolyzer demand', color: C.el }];
+  if (hasImport) series.push({ name: 'Grid import', color: C.grid });
+  legend(c.lg, series);
+  const vals = x => [x.renewableMwh, x.electrolyzerMwh, ...(hasImport ? [x.gridImportMwh] : [])];
+  columnChart(c.plot, {
+    h: 280, aria: 'Monthly renewable generation, electrolyzer demand and grid import in megawatt-hours',
+    yMax: Math.max(...m.flatMap(vals)), yFmt: v => num(v, 0), series,
+    groups: m.map(x => ({ label: (c.plot.clientWidth - 62) / 12 < 30 ? MONTHS[x.month - 1][0] : MONTHS[x.month - 1], values: vals(x) })),
+    tipTitle: g => MONTHS[g] + ' ' + year,
+    tipRows: g => [...series.map((se, i) => ({ color: se.color, value: num(vals(m[g])[i], 0) + ' MWh', label: se.name })),
+      { color: C.h2, value: num(m[g].hydrogenTonnes, 1) + ' t', label: 'Hydrogen produced' }]
+  });
+  table(c.tbl, ['Month', 'Renewable MWh', 'Electrolyzer MWh', 'Grid import MWh', 'Surplus MWh', 'Hydrogen t'],
+    m.map(x => [MONTHS[x.month - 1], num(x.renewableMwh, 0), num(x.electrolyzerMwh, 0), num(x.gridImportMwh, 0), num(x.surplusMwh, 0), num(x.hydrogenTonnes, 1)]));
+  c.foot.textContent = 'Surplus is renewable energy the electrolyzer could not use: curtailed when off-grid, exported or banked when grid-connected.';
+}
+
+const COMPONENTS = [
+  { name: 'Renewable plant', color: C.re, f: b => b.renewableCapex },
+  { name: 'Electrolyzer (incl. stack replacement)', color: C.el, f: b => b.electrolyzerCapex + b.stackReplacement },
+  { name: 'Grid electricity', color: C.grid, f: b => Math.max(0, b.gridElectricity) },
+  { name: 'Other capex (compression, storage, water)', color: C.other, f: b => b.otherCapex, onColor: 'var(--on-s4)' },
+  { name: 'Operations and water', color: C.opex, f: b => b.fixedOpex + b.water }
+];
+
+function renderModes() {
+  const s = cur(), c = cards.modes;
+  c.sub.textContent = `${s.site}: cost of a kilogram of hydrogen by component, ${FX.code} per kg. Click a bar to switch mode.`;
+  legend(c.lg, COMPONENTS);
+  const rows = MODE_ORDER.map(k => find(state.site, k)).filter(Boolean).map(sc => ({
+    label: MODE_SHORT[sc.modeKey], total: sc.result.finance.lcohUsdPerKg, selected: sc.modeKey === state.mode,
+    onClick: () => { state.mode = sc.modeKey; renderAll(); },
+    segments: sc.result.finance.breakdown ? COMPONENTS.map(k => ({ name: k.name, color: k.color, onColor: k.onColor, value: k.f(sc.result.finance.breakdown) })) : []
+  }));
+  stackedBars(c.plot, { rows, aria: `Levelized cost of hydrogen by operating mode for ${s.site}` });
+  table(c.tbl, ['Mode', ...COMPONENTS.map(k => k.name), `Total ${FX.code}/kg`],
+    rows.map(r => [r.label, ...(r.segments.length ? r.segments.map(x => money(x.value)) : COMPONENTS.map(() => 'n/a')), money(r.total)]));
+  const g = k => find(state.site, k)?.result.finance.lcohUsdPerKg;
+  const d = (a, b) => (a != null && b != null) ? ((a - b >= 0 ? '+' : '−') + money(Math.abs(a - b)) + '/kg') : 'n/a';
+  c.foot.textContent = `Hourly vs monthly matching: ${d(g('hourly'), g('monthly'))}. Hourly matching vs no matching: ${d(g('hourly'), g('none'))}. ` +
+    'Unmatched grid hydrogen is cheapest only because it is not certifiable as renewable.';
+}
+
+function renderSweep() {
+  const s = cur(), c = cards.sweep, all = s.sweep, valid = all.filter(p => p.lcohUsdPerKg != null);
+  c.sub.textContent = 'LCOH against renewable capacity as a multiple of the electrolyzer rating, same mix of sources';
+  legend(c.lg, [{ name: 'LCOH', color: C.re, kind: 'line' }]);
+  if (!valid.length) { c.plot.textContent = 'No hydrogen produced in any sizing.'; c.tbl.textContent = ''; return; }
+  // Very small plants cost several times more and would flatten the interesting part of the curve.
+  const floor = Math.min(...valid.map(p => p.lcohUsdPerKg));
+  const pts = valid.filter(p => p.lcohUsdPerKg <= floor * 2.2), clipped = pts.length < valid.length;
+  const lo = Math.min(...pts.map(p => p.lcohUsdPerKg)), hi = Math.max(...pts.map(p => p.lcohUsdPerKg));
+  const bi = pts.findIndex(p => p.ratio === s.bestRatio), xmax = Math.max(...all.map(p => p.ratio));
+  const R = FX.rate, sc = niceScale(Math.max(0, (lo - (hi - lo) * .15) * R), (hi + (hi - lo) * .1) * R, 4);
+  panelChart(c.plot, {
+    aria: 'Levelized cost of hydrogen against renewable capacity ratio',
+    xs: pts.map(p => p.ratio), x0: 0, x1: xmax, ml: Math.max(50, axisMoney(sc.max).length * 6.6 + 14), markers: true,
+    xTicks: Array.from({ length: Math.floor(xmax) + 1 }, (_, i) => ({ x: i, label: i + '×' })),
+    panels: [{ title: `LCOH (${FX.code} per kg)`, h: 220, yMin: sc.min, yMax: sc.max, yFmt: v => axisMoney(v), series: [{ name: 'LCOH', color: C.re, vals: pts.map(p => p.lcohUsdPerKg * R) }] }],
+    highlight: bi >= 0 ? { i: bi, text: `Best ${num(pts[bi].ratio, 2)}× · ${money(pts[bi].lcohUsdPerKg)}` } : null,
+    tipTitle: i => `${num(pts[i].ratio, 2)}× electrolyzer rating`,
+    tipRows: i => [
+      { color: C.re, value: money(pts[i].lcohUsdPerKg), label: 'LCOH per kg' },
+      { color: null, value: pct(pts[i].electrolyzerCapacityFactor), label: 'Electrolyzer utilisation' },
+      { color: null, value: pct(pts[i].surplusShare), label: 'Renewable surplus' },
+      { color: null, value: num(pts[i].hydrogenTonnes, 0) + ' t/yr', label: 'Hydrogen' }]
+  });
+  table(c.tbl, ['Ratio', `LCOH ${FX.code}/kg`, 'Electrolyzer utilisation', 'Renewable surplus', 'Hydrogen t/yr'],
+    all.map(p => [num(p.ratio, 2) + '×', money(p.lcohUsdPerKg), pct(p.electrolyzerCapacityFactor), pct(p.surplusShare), num(p.hydrogenTonnes, 0)]));
+  const edge = s.bestRatio >= xmax;
+  c.foot.textContent = (edge ? 'The best size is at the edge of the tested range, so the true optimum may be larger. ' : '') +
+    (clipped ? 'Sizes costing more than 2.2 times the best are left off the chart (see the table). ' : '') +
+    'Small plants waste the electrolyzer; large plants waste renewable energy. The curve shows the trade-off.';
+}
+
+function renderDuration() {
+  const s = cur(), c = cards.duration, h = s.result.hourly;
+  const sortDesc = a => Float64Array.from(a).sort().reverse();
+  const re = sortDesc(h.renewableKw), el = sortDesc(h.electrolyzerKw), n = re.length;
+  const steps = 200, xs = Array.from({ length: steps + 1 }, (_, i) => i * 100 / steps);
+  const at = (arr, p) => arr[Math.min(n - 1, Math.round(p / 100 * (n - 1)))] / 1000;
+  const reV = xs.map(p => at(re, p)), elV = xs.map(p => at(el, p)), rated = s.result.plant.electrolyzerMw;
+  c.sub.textContent = 'For what share of the year (horizontal axis) each power level is reached or exceeded';
+  legend(c.lg, [{ name: 'Renewable generation', color: C.re, kind: 'line' }, { name: 'Electrolyzer demand', color: C.el, kind: 'line' }]);
+  const close = Math.abs(reV[0] - elV[0]) < Math.max(reV[0], elV[0]) * 0.08;
+  panelChart(c.plot, {
+    aria: 'Power duration curve for renewable generation and electrolyzer demand',
+    xs, x0: 0, x1: 100, xTicks: [0, 25, 50, 75, 100].map(x => ({ x, label: x + '%' })),
+    panels: [{ title: `Power (MW). Grey line: electrolyzer rating, ${num(rated, 0)} MW`, h: 230, yMax: Math.max(reV[0], rated),
+      yFmt: v => num(v, v % 1 ? 1 : 0), ref: { v: rated },
+      series: [{ name: 'Renewable generation', color: C.re, vals: reV, area: true }, { name: 'Electrolyzer demand', color: C.el, vals: elV }] }],
+    direct: [{ panel: 0, s: 0, i: 4, text: 'Renewable generation', dx: 6, dy: -6 }, { panel: 0, s: 1, i: 4, text: 'Electrolyzer demand', dx: 6, dy: 24 }],
+    tipTitle: i => `Exceeded ${num(xs[i], 1)}% of the year (about ${num(xs[i] / 100 * n, 0)} h)`,
+    tipRows: i => [{ color: C.re, value: num(reV[i], 2) + ' MW', label: 'Renewable generation' }, { color: C.el, value: num(elV[i], 2) + ' MW', label: 'Electrolyzer demand' }]
+  });
+  const deciles = Array.from({ length: 11 }, (_, i) => i * 10);
+  table(c.tbl, ['Share of year', 'Renewable MW', 'Electrolyzer MW'], deciles.map(p => [p + '%', num(at(re, p), 2), num(at(el, p), 2)]));
+  c.foot.textContent = 'Where the orange line is flat at the top, the electrolyzer runs at full rating. The gap above it is surplus renewable power.';
+}
+
+function renderTornado() {
+  const s = cur(), c = cards.tornado, base = s.result.finance.lcohUsdPerKg;
+  c.sub.textContent = `Change in LCOH when one assumption moves, from a base of ${money(base)}/kg`;
+  legend(c.lg, [{ name: 'Lowers cost', color: 'var(--lo)' }, { name: 'Raises cost', color: 'var(--hi)' }]);
+  const rows = s.sensitivity.filter(b => b.lcohLow != null && b.lcohHigh != null)
+    .map(b => ({ name: b.parameter, items: [{ label: b.lowLabel, value: b.lcohLow }, { label: b.highLabel, value: b.lcohHigh }] }))
+    .sort((a, b) => Math.max(...b.items.map(i => Math.abs(i.value - base))) - Math.max(...a.items.map(i => Math.abs(i.value - base))));
+  if (base == null || !rows.length) { c.plot.textContent = 'No sensitivity available.'; return; }
+  tornado(c.plot, { rows, base, aria: 'Sensitivity of levelized cost of hydrogen to key assumptions' });
+  table(c.tbl, ['Assumption', 'Low case', `LCOH ${FX.code}/kg`, 'High case', `LCOH ${FX.code}/kg`], rows.map(r => [r.name, r.items[0].label, money(r.items[0].value), r.items[1].label, money(r.items[1].value)]));
+  c.foot.textContent = 'Grid tariff has no effect in modes that import no grid power.';
+}
+
+// ---------- header: hero, chips, tiles ----------
+function renderSummary() {
+  const s = cur(), r = s.result, y = r.year1, f = r.finance, p = r.plant;
+  $('#lcoh').replaceChildren(document.createTextNode(f.lcohUsdPerKg == null ? 'n/a' : money(f.lcohUsdPerKg)), html('small', { text: 'per kg' }));
+  const chip = (ok, name, share) => html('div', { class: 'chip ' + (ok ? 'ok' : 'bad') },
+    html('b', { text: ok ? '✓' : '✕', 'aria-hidden': 'true' }),
+    html('span', { text: ok ? `Meets ${name}` : `Does not meet ${name}: ${pct(share)} matched` }));
+  const chips = $('#chips');
+  chips.replaceChildren(
+    chip(y.simultaneousRenewableShare >= 0.999, 'hourly matching (EU rule from 2030)', y.simultaneousRenewableShare),
+    chip(y.monthlyMatchedShare >= 0.999, 'monthly matching (EU rule to 2029)', y.monthlyMatchedShare),
+    html('div', { class: 'foot', text: MODE_HELP[s.modeKey] }));
+  const tile = (l, v, sub) => html('div', { class: 'tile' }, html('div', { class: 'l', text: l }), html('div', { class: 'v', text: v }), html('div', { class: 's', text: sub }));
+  const re = [p.pvMwp > 0 ? `${num(p.pvMwp, 1)} MWp solar` : '', p.windMw > 0 ? `${num(p.windMw, 1)} MW wind` : ''].filter(Boolean).join(' + ');
+  $('#tiles').replaceChildren(
+    tile('Hydrogen output', num(y.hydrogenTonnes, 0) + ' t/yr', `${num(f.lifetimeHydrogenTonnes, 0)} t over the project`),
+    tile('Electrolyzer utilisation', pct(y.electrolyzerCapacityFactor), `${num(y.fullLoadHours, 0)} full-load hours`),
+    tile('Renewable plant utilisation', pct(y.renewableCapacityFactor), `capacity factor of ${re}`),
+    tile('Energy per kg', num(y.specificConsumptionKwhPerKg, 1) + ' kWh', 'stack plus compression'),
+    tile('Plant', num(p.electrolyzerMw, 0) + ' MW', `electrolyzer + ${re} (${num(p.renewableToElectrolyzerRatio, 2)}×)`),
+    tile('Total capex', bigMoney(f.totalCapexUsd), `${f.stackReplacements} stack replacement${f.stackReplacements === 1 ? '' : 's'} in 20 years`));
+  const note = $('#windNote');
+  note.hidden = !(p.windMw > 0);
+  note.textContent = 'Wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid). Reanalysis can understate local wind in complex terrain, so treat wind results as conservative until measured site data is loaded.';
+}
+
+function renderAssumptions() {
+  const a = D.assumptions, box = $('#assumpCols'); box.replaceChildren();
+  const grp = (t, rows) => box.append(html('div', null, html('h3', { text: t }), html('dl', null, ...rows.flatMap(([k, v]) => [html('dt', { text: k }), html('dd', { text: String(v) })]))));
+  const e = a.electrolyzer, pv = a.pv, w = a.wind, g = a.grid, fi = a.finance, cm = a.compression;
+  grp('Electrolyzer', [['Energy at rated load', e.specificEnergyAtRatedKwhPerKg + ' kWh/kg'], ['Part-load efficiency gain', pct(e.partLoadEfficiencyGain)], ['Minimum load', pct(e.minimumLoadFraction)], ['Degradation', pct(e.degradationPerYear, 1) + ' per year'], ['Water', e.waterLitersPerKg + ' L/kg']]);
+  grp('Compression', [['Inlet to outlet', cm.inletBar + ' to ' + cm.outletBar + ' bar'], ['Stages', cm.stages]]);
+  grp('Solar', [['System efficiency', pct(pv.systemEfficiencyFactor)], ['Temperature coefficient', pct(pv.tempCoefficientPerC, 2) + ' per °C'], ['Degradation', pct(pv.degradationPerYear, 1) + ' per year']]);
+  grp('Wind', [['Hub height', w.hubHeightM + ' m'], ['Cut-in / rated / cut-out', `${w.cutInMs} / ${w.ratedMs} / ${w.cutOutMs} m/s`], ['Losses', pct(1 - w.lossFactor)]]);
+  grp('Grid', [['Import tariff', money(g.importTariffUsdPerKwh) + '/kWh'], ['Wheeling fee (monthly mode)', money(g.wheelingFeeUsdPerKwh) + '/kWh'], ['Export price', money(g.exportPriceUsdPerKwh) + '/kWh']]);
+  grp('Finance', [['Discount rate', pct(fi.discountRate, 1)], ['Project life', fi.projectLifetimeYears + ' years'], ['Electrolyzer capex', money(fi.electrolyzerCapexUsdPerKw, 0) + '/kW'], ['Solar capex', money(fi.pvCapexUsdPerKwp, 0) + '/kWp'], ['Wind capex', money(fi.windCapexUsdPerKw, 0) + '/kW'], ['Other capex', pct(fi.otherCapexFraction) + ' of the above'], ['Opex', pct(fi.opexFractionOfCapexPerYear, 1) + ' of capex per year'], ['Stack life', num(fi.stackLifetimeHours) + ' h']]);
+  const L = [
+    D.note,
+    'Solar uses horizontal irradiance as a proxy for tilted panels. Compression assumes ideal-gas behaviour, which understates the energy needed above about 350 bar.',
+    'LCOH excludes land, grid connection, financing fees, tax and subsidies. Unmatched grid hydrogen carries the grid\'s carbon intensity and is not certifiable as renewable.',
+    'Matching rules follow the EU RFNBO delegated act, which is under review. Treat the policy as a setting, not a fixed fact.',
+    'One weather year is repeated for every project year, so inter-annual variability is not captured.'];
+  $('#limits').replaceChildren(...L.map(t => html('li', { text: t })));
+}
+
+// ---------- filters ----------
+function renderFilters() {
+  const mk = (box, items, get, set) => {
+    box.replaceChildren(...items.map(([k, label]) => {
+      const b = html('button', { type: 'button', 'aria-pressed': String(get() === k), text: label });
+      if (box.id === 'modeSeg') b.title = MODE_HELP[k];
+      b.addEventListener('click', () => { set(k); renderAll(); });
+      return b;
+    }));
+  };
+  mk($('#siteSeg'), sites.map(s => [s, s]), () => state.site, k => state.site = k);
+  mk($('#modeSeg'), MODE_ORDER.map(k => [k, MODE_SHORT[k]]), () => state.mode, k => state.mode = k);
+}
+
+// ---------- live plant (SignalR) ----------
+const LIVE_WINDOWS = [[300, '5 min'], [900, '15 min'], [3600, '1 hour']];
+const live = { started: false, plant: null, recs: [], ids: new Set(), win: 300, hover: false, conn: null, state: 'connecting', raf: 0, cap: 1300 };
+
+function setConn(state, text) {
+  live.state = state;
+  const el = $('#liveConn'); el.dataset.state = state; el.textContent = text;
+}
+function simClock(iso) {
+  return new Date(iso).toLocaleString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' UTC';
+}
+function setReplay(r) {
+  const el = $('#liveReplay');
+  if (!r) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = `Replaying ${r.site} ${r.source} weather: ${simClock(r.simulatedUtc)}, ${num(r.speedUp, 0)}\u00D7 speed`;
+}
+function liveNote(text) { const n = $('#liveNote'); n.hidden = !text; n.textContent = text || ''; }
+
+function normalize(r) {
+  let ts = String(r.timestamp);
+  if (!/(Z|[+-]\d\d:?\d\d)$/.test(ts)) ts += 'Z';   // treat timestamps without a zone as UTC
+  return { id: r.id, t: Date.parse(ts), kw: r.renewablePowerInputKw, h2: r.hydrogenProducedKgPerHour, water: r.waterConsumedLitersPerHour, cost: r.electricityCostPerHour, status: r.operationalStatus };
+}
+function addRecs(list) {
+  let added = false;
+  for (const raw of list) {
+    const r = normalize(raw);
+    if (!isFinite(r.t) || live.ids.has(r.id)) continue;
+    live.ids.add(r.id); live.recs.push(r); added = true;
+  }
+  if (!added) return;
+  live.recs.sort((a, b) => a.t - b.t);
+  while (live.recs.length > live.cap) live.ids.delete(live.recs.shift().id);
+  scheduleLive();
+}
+function scheduleLive() {
+  if (state.view !== 'live' || live.raf) return;
+  live.raf = requestAnimationFrame(() => { live.raf = 0; renderLive(); });
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('could not load ' + src));
+    document.head.append(s);
+  });
+}
+async function loadSignalR() {
+  if (window.signalR) return;
+  // Prefer the copy the API serves (works without internet); fall back to the CDN.
+  try { await loadScript('lib/signalr.min.js'); } catch (e) {}
+  if (!window.signalR) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js');
+}
+
+async function fetchHistory() {
+  const res = await fetch(`api/telemetry?limit=${live.cap}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('history request failed (' + res.status + ')');
+  addRecs(await res.json());
+}
+
+async function connectLive() {
+  setConn('connecting', 'Connecting');
+  try {
+    if (!live.plant) {
+      const r = await fetch('api/plant', { cache: 'no-store' });
+      if (!r.ok) throw new Error('plant request failed (' + r.status + ')');
+      live.plant = await r.json();
+      live.cap = Math.min(2000, Math.ceil(3600 / Math.max(1, live.plant.intervalSeconds)) + 60);
+      setReplay(live.plant.replay);
+      const tag = $('#liveSource'); tag.hidden = false;
+      tag.textContent = /^simulated$/i.test(live.plant.source) ? 'Simulated data, not a real plant' : 'Source: ' + live.plant.source;
+    }
+    await loadSignalR();
+    await fetchHistory();
+    const conn = new signalR.HubConnectionBuilder().withUrl(live.plant.hub).withAutomaticReconnect([0, 2000, 5000, 10000, 20000]).build();
+    conn.on('ReceiveTelemetry', rec => { addRecs([rec]); });
+    // The clock message follows its sample on the same connection, so it belongs to the newest record.
+    conn.on('ReplayClock', r => {
+      setReplay(r);
+      const newest = live.recs[live.recs.length - 1];
+      if (newest && !newest.sim) newest.sim = r.simulatedUtc;
+    });
+    conn.onreconnecting(() => setConn('reconnecting', 'Reconnecting'));
+    conn.onreconnected(async () => {
+      try { await conn.invoke('JoinPlantGroup', live.plant.plantId); await fetchHistory(); } catch (e) {}
+      setConn('live', 'Live'); liveNote('');
+    });
+    conn.onclose(() => { setConn('offline', 'Offline'); liveNote('The live connection was lost. Trying again in 10 seconds.'); setTimeout(connectLive, 10000); });
+    await conn.start();
+    await conn.invoke('JoinPlantGroup', live.plant.plantId);
+    live.conn = conn;
+    setConn('live', 'Live'); liveNote('');
+  } catch (e) {
+    setConn('offline', 'Offline');
+    liveNote('Could not reach the live feed: ' + (e && e.message ? e.message : e) + '. Check that the API is running. Trying again in 10 seconds.');
+    setTimeout(connectLive, 10000);
+  }
+}
+
+function startLive() {
+  if (live.started) return; live.started = true;
+  if (location.protocol === 'file:') {
+    setConn('offline', 'Not connected');
+    liveNote('This page was opened as a file. The live view works when the page is opened from the HydroPulse API (for example http://localhost:5196/ while the API is running), because the API serves the live data.');
+    return;
+  }
+  connectLive();
+}
+
+function buildLiveCards() {
+  const c = makeCard('live', 'Live operation', { full: true, into: '#liveCards' });
+  const seg = html('div', { class: 'seg', role: 'group', 'aria-label': 'Time window' });
+  LIVE_WINDOWS.forEach(([sec, label]) => {
+    const b = html('button', { type: 'button', text: label, 'aria-pressed': String(live.win === sec) });
+    b.addEventListener('click', () => { live.win = sec; [...seg.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderLive(true); });
+    seg.append(b);
+  });
+  c.extra.append(seg);
+  // Do not redraw under the cursor or while the chart has keyboard focus, or the tooltip would vanish every few seconds.
+  c.plot.addEventListener('pointerenter', () => { live.hover = true; });
+  c.plot.addEventListener('pointerleave', () => { live.hover = false; scheduleLive(); });
+  c.plot.addEventListener('focusin', () => { live.hover = true; });
+  c.plot.addEventListener('focusout', () => { live.hover = false; scheduleLive(); });
+}
+
+function ago(ms) { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + (s % 60) + ' s'; }
+function clock(t) { return new Date(t).toLocaleTimeString('en-GB'); }
+
+function renderLive(force) {
+  const rec = live.recs, c = cards.live, plant = live.plant;
+  const rated = plant ? plant.ratedPowerKw : 1000, every = plant ? plant.intervalSeconds : 3;
+  if (!rec.length) {
+    $('#liveH2').replaceChildren(document.createTextNode('—'));
+    $('#liveChips').replaceChildren(); $('#liveTiles').replaceChildren(); $('#liveLast').textContent = '';
+    c.plot.textContent = 'Waiting for the first sample.'; c.tbl.textContent = ''; c.lg.replaceChildren(); c.foot.textContent = '';
+    return;
+  }
+  const last = rec[rec.length - 1], tEnd = last.t, tStart = tEnd - live.win * 1000;
+  const win = rec.filter(r => r.t >= tStart);
+  const winLabel = LIVE_WINDOWS.find(w => w[0] === live.win)[1];
+
+  // hero and status
+  $('#liveH2').replaceChildren(document.createTextNode(num(last.h2, 1)), html('small', { text: 'kg per hour' }));
+  const idle = /standby/i.test(last.status);
+  $('#liveChips').replaceChildren(html('div', { class: 'chip ' + (idle ? 'idle' : 'ok') }, html('b', { text: idle ? '○' : '✓', 'aria-hidden': 'true' }), html('span', { text: last.status })));
+
+  // integrate over the window; cap each step so a connection gap does not count as production
+  let kg = 0, kwh = 0, covered = 0;
+  for (let i = 1; i < win.length; i++) {
+    const dt = Math.min((win[i].t - win[i - 1].t) / 1000, every * 2.5);
+    kg += win[i].h2 * dt / 3600; kwh += win[i].kw * dt / 3600; covered += dt;
+  }
+  const avgKw = covered > 0 ? kwh * 3600 / covered : last.kw;   // averaged over the time actually covered by samples
+  const tile = (l, v, sub) => html('div', { class: 'tile' }, html('div', { class: 'l', text: l }), html('div', { class: 'v', text: v }), html('div', { class: 's', text: sub }));
+  $('#liveTiles').replaceChildren(
+    tile('Renewable power input', num(last.kw, 0) + ' kW', `${pct(last.kw / rated)} of the ${num(rated, 0)} kW rating`),
+    tile('Water use', num(last.water, 0) + ' L/h', last.h2 > 0.001 ? `${num(last.water / last.h2, 1)} L per kg of hydrogen` : 'electrolyzer idle'),
+    tile('Electricity cost', money(last.cost) + '/h', 'at the plant tariff'),
+    ...(plant && plant.tariffUsdPerKwh && last.h2 > 0.001 ? [tile('Energy per kg', num(last.cost / plant.tariffUsdPerKwh / last.h2, 1) + ' kWh', 'stack plus compression')] : []),
+    tile('Hydrogen, last ' + winLabel, num(kg, 1) + ' kg', 'integrated from the samples'),
+    tile('Average power, last ' + winLabel, num(avgKw, 0) + ' kW', `${pct(avgKw / rated)} of the rating`));
+
+  if (!force && live.hover) return;
+
+  // chart: break the line where samples are missing
+  const xs = [], kw = [], h2 = [];
+  win.forEach((r, i) => {
+    if (i && r.t - win[i - 1].t > every * 2500) { xs.push((win[i - 1].t + every * 1000 - tEnd) / 1000); kw.push(null); h2.push(null); }
+    xs.push((r.t - tEnd) / 1000); kw.push(r.kw); h2.push(r.h2);
+  });
+  const tickStep = live.win / 5, durLabel = sec => sec % 60 === 0 ? (sec / 60) + ' min' : sec + ' s';
+  const narrow = c.plot.clientWidth < 520;
+  const xTicks = [0, 1, 2, 3, 4, 5].filter(k => !narrow || k % 2 === 1).map(k => ({ x: -live.win + k * tickStep, label: k === 5 ? 'now' : '−' + durLabel(live.win - k * tickStep) }));
+  const kwMax = Math.max(rated, ...win.map(r => r.kw)), h2Max = Math.max(1, ...win.map(r => r.h2)) * 1.05;
+  c.sub.textContent = `${plant ? plant.name : 'Plant'} · ${plant ? plant.source : ''} · last ${winLabel}, one sample every ${every} s · times in your local time`;
+  legend(c.lg, [{ name: 'Renewable power input', color: C.re, kind: 'line' }, { name: 'Hydrogen output', color: C.h2, kind: 'line' }]);
+  const idxAt = i => { // map a chart index (with inserted gap points) back to a sample
+    let n = -1; for (let k = 0; k <= i && k < xs.length; k++) if (kw[k] != null) n++; return win[Math.max(0, n)];
+  };
+  panelChart(c.plot, {
+    aria: 'Live renewable power input and hydrogen output',
+    xs, x0: -live.win, x1: 0, xTicks,
+    panels: [
+      { title: `Power (kW). Grey line: rating, ${num(rated, 0)} kW`, h: 170, yMax: kwMax, yFmt: v => num(v, 0), series: [{ name: 'Renewable power input', color: C.re, vals: kw, area: true }], ref: { v: rated } },
+      { title: 'Hydrogen output (kg/h)', h: 110, yMax: h2Max, yFmt: v => num(v, v < 10 && v % 1 ? 1 : 0), nt: 3, series: [{ name: 'Hydrogen output', color: C.h2, vals: h2, area: true }] }],
+    tipTitle: i => { const r = idxAt(i); return clock(r.t); },
+    tipRows: i => { const r = idxAt(i); return [
+      { color: C.re, value: num(r.kw, 0) + ' kW', label: 'Renewable power input' },
+      { color: C.h2, value: num(r.h2, 1) + ' kg/h', label: 'Hydrogen output' },
+      { color: 'var(--muted)', value: num(r.water, 0) + ' L/h', label: 'Water' },
+      { color: 'var(--muted)', value: money(r.cost) + '/h', label: 'Electricity cost' },
+      { color: 'var(--muted)', value: r.status, label: 'Status' },
+      ...(r.sim ? [{ color: 'var(--muted)', value: simClock(r.sim), label: 'Simulated time' }] : [])]; }
+  });
+  table(c.tbl, ['Time', 'Power kW', 'Hydrogen kg/h', 'Water L/h', `Electricity ${FX.code}/h`, 'Status'],
+    rec.slice(-100).reverse().map(r => [clock(r.t), num(r.kw, 0), num(r.h2, 1), num(r.water, 0), money(r.cost), r.status]));
+  c.foot.textContent = 'The chart pauses while you hover over it or step through it with the arrow keys, and catches up when you move away.';
+}
+
+// "last sample N s ago" ticker and stall warning
+setInterval(() => {
+  if (state.view !== 'live') return;
+  const el = $('#liveLast');
+  if (!live.recs.length) { el.textContent = ''; return; }
+  const age = Date.now() - live.recs[live.recs.length - 1].t, every = live.plant ? live.plant.intervalSeconds : 3;
+  // The server's clock can differ from this browser's, so only warn on a clearly large gap.
+  el.textContent = age > every * 4000 && age < 24 * 3600e3 ? `Last sample ${ago(age)} ago (no new data)` : `Last sample ${clock(live.recs[live.recs.length - 1].t)}`;
+}, 1000);
+
+// ---------- views ----------
+function setView(v, persist = true) {
+  state.view = v;
+  $('#scenarioView').hidden = v !== 'scenarios';
+  $('#liveView').hidden = v !== 'live';
+  [...$('#viewSeg').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (persist) { try { history.replaceState(null, '', v === 'live' ? '#live' : '#scenarios'); } catch (e) {} }
+  hideTip();
+  $('#src').textContent = v === 'live' ? 'Live telemetry from the plant over SignalR.' : `${D.weatherSource}. Generated ${new Date(D.generatedUtc).toISOString().slice(0, 10)}.`;
+  if (v === 'live') { startLive(); renderLive(true); } else renderAll();
+}
+function initViews() {
+  const seg = $('#viewSeg');
+  [['scenarios', 'Scenarios'], ['live', 'Live plant']].forEach(([k, label]) => {
+    const b = html('button', { type: 'button', text: label, 'aria-pressed': 'false' }); b.dataset.v = k;
+    b.addEventListener('click', () => setView(k)); seg.append(b);
+  });
+  setView(location.hash === '#live' ? 'live' : 'scenarios', false);
+}
+
+// ---------- currency ----------
+const FXD = D.fx && D.fx.rates ? D.fx : null;
+const COMMON = ['USD','KES','EUR','GBP','ZAR','TZS','UGX','RWF','ETB','NGN','GHS','EGP','MAD','AED','SAR','INR','CNY','JPY','AUD','CAD','CHF','BRL','MXN','SEK','NOK'];
+let names = null; try { names = new Intl.DisplayNames(['en'], { type: 'currency' }); } catch (e) {}
+const cname = c => { let n = ''; try { n = names ? names.of(c) : ''; } catch (e) {} return n && n !== c ? `${c} · ${n}` : c; };
+function setCurrency(code, rate) { FX.code = code; FX.rate = rate; }
+function renderFxNote() {
+  const n = $('#fxNote'); n.replaceChildren();
+  if (FX.code === 'USD') {
+    n.append(document.createTextNode(FXD ? 'Costs are calculated in US dollars. Pick a currency to see them converted. ' : 'Costs are calculated in US dollars. To see another currency, choose Custom and enter the exchange rate. '));
+  } else {
+    const custom = $('#fxSel').value === '__custom';
+    n.append(document.createTextNode(`Converted at 1 USD = ${num(FX.rate, FX.rate >= 100 ? 2 : 4)} ${FX.code}` + (custom ? ' (rate you entered). ' : FXD ? ` (rates updated ${FXD.asOf}${FXD.status === 'cached' ? ', saved copy, not refreshed this run' : ''}). ` : '. ')));
+  }
+  n.append(document.createTextNode('Conversion is for display only; the calculation itself is unchanged. '));
+  if (FXD && FXD.sourceUrl) n.append(html('a', { href: FXD.sourceUrl, target: '_blank', rel: 'noopener noreferrer', text: 'Rates By Exchange Rate API' }));
+}
+function initCurrency() {
+  const sel = $('#fxSel'), codeIn = $('#fxCode'), rateIn = $('#fxRate'), box = $('#fxCustom');
+  const add = (parent, c) => parent.append(html('option', { value: c, text: cname(c) }));
+  const g1 = html('optgroup', { label: 'Common' }), g2 = html('optgroup', { label: 'All currencies' });
+  const avail = FXD ? Object.keys(FXD.rates).filter(c => FXD.rates[c] > 0) : ['USD'];
+  COMMON.filter(c => c === 'USD' || avail.includes(c)).forEach(c => add(g1, c));
+  avail.filter(c => !COMMON.includes(c)).sort().forEach(c => add(g2, c));
+  sel.append(g1); if (g2.children.length) sel.append(g2);
+  sel.append(html('option', { value: '__custom', text: 'Custom rate…' }));
+  const apply = () => {
+    const v = sel.value;
+    box.hidden = v !== '__custom';
+    if (v === '__custom') {
+      const code = (codeIn.value || '').trim().toUpperCase(), r = parseFloat(rateIn.value);
+      setCurrency(code.length === 3 ? code : 'USD', code.length === 3 && r > 0 && isFinite(r) ? r : 1);
+    } else setCurrency(v, v === 'USD' ? 1 : FXD.rates[v]);
+    try { localStorage.setItem('hp-fx', JSON.stringify({ v, code: codeIn.value, rate: rateIn.value })); } catch (e) {}
+    renderFxNote(); renderAll();
+  };
+  try {
+    const sv = JSON.parse(localStorage.getItem('hp-fx') || 'null');
+    if (sv && [...sel.options].some(o => o.value === sv.v)) { sel.value = sv.v; codeIn.value = sv.code || ''; rateIn.value = sv.rate || ''; }
+  } catch (e) {}
+  sel.value = sel.value || 'USD';
+  sel.addEventListener('change', apply); codeIn.addEventListener('input', apply); rateIn.addEventListener('input', apply);
+  const v = sel.value; box.hidden = v !== '__custom';
+  if (v === '__custom') { const code = (codeIn.value || '').trim().toUpperCase(), r = parseFloat(rateIn.value); setCurrency(code.length === 3 ? code : 'USD', code.length === 3 && r > 0 ? r : 1); }
+  else setCurrency(v, v === 'USD' ? 1 : (FXD ? FXD.rates[v] : 1));
+  renderFxNote();
+}
+function redrawCharts() { if (state.view === 'live') { renderLive(true); return; } renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }
+
+function renderAll() {
+  if (state.view === 'live') { renderLive(true); return; }
+  renderFilters(); renderSummary(); renderAssumptions(); renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado();
+}
+
+// ---------- theme ----------
+const themes = ['auto', 'light', 'dark'];
+let ti = 0;
+try { ti = Math.max(0, themes.indexOf(localStorage.getItem('hp-theme'))); } catch (e) {}
+function applyTheme() {
+  if (themes[ti] === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = themes[ti];
+  $('#theme').textContent = 'Theme: ' + themes[ti];
+  try { localStorage.setItem('hp-theme', themes[ti]); } catch (e) {}
+}
+$('#theme').addEventListener('click', () => { ti = (ti + 1) % themes.length; applyTheme(); });
+
+// ---------- boot ----------
+$('#src').textContent = `${D.weatherSource}. Generated ${new Date(D.generatedUtc).toISOString().slice(0, 10)}.`;
+applyTheme(); buildCards(); buildLiveCards(); initCurrency(); renderAll(); initViews();
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { redrawCharts(); }, 120); }).observe(document.body);
+})();
+</script>
+</body>
+</html>

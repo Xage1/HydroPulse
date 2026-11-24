@@ -15,6 +15,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HydroPulse.Api", "src\Hydro
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HydroPulse.Domain.Tests", "tests\HydroPulse.Domain.Tests\HydroPulse.Domain.Tests.csproj", "{6AAACD06-F0DA-4046-9143-811EBDFF2B51}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HydroPulse.ScenarioRunner", "tools\HydroPulse.ScenarioRunner\HydroPulse.ScenarioRunner.csproj", "{83128B62-399B-47E7-8229-6A52F2A49618}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +89,18 @@ Global
 		{6AAACD06-F0DA-4046-9143-811EBDFF2B51}.Release|x64.Build.0 = Release|Any CPU
 		{6AAACD06-F0DA-4046-9143-811EBDFF2B51}.Release|x86.ActiveCfg = Release|Any CPU
 		{6AAACD06-F0DA-4046-9143-811EBDFF2B51}.Release|x86.Build.0 = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|x64.Build.0 = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Debug|x86.Build.0 = Debug|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|x64.ActiveCfg = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|x64.Build.0 = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|x86.ActiveCfg = Release|Any CPU
+		{83128B62-399B-47E7-8229-6A52F2A49618}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -95,5 +111,6 @@ Global
 		{D7409A7B-4064-43EA-8504-36A2FD422B30} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{45AA0A8F-7267-4BB9-98D8-F37C2A350443} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{6AAACD06-F0DA-4046-9143-811EBDFF2B51} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{83128B62-399B-47E7-8229-6A52F2A49618} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

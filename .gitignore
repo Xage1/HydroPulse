@@ -1,0 +1,9 @@
+
+bin/
+obj/
+source_export.txt
+
+out/
+data/fx-cache.json
+
+src/HydroPulse.Api/wwwroot/
