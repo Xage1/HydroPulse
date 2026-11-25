@@ -7,3 +7,5 @@ out/
 data/fx-cache.json
 
 src/HydroPulse.Api/wwwroot/
+
+out/
