@@ -936,7 +936,7 @@ function renderLive(force) {
     tile('Electricity cost', money(last.cost) + '/h', 'at the plant tariff'),
     ...(plant && plant.tariffUsdPerKwh && last.h2 > 0.001 ? [tile('Energy per kg', num(last.cost / plant.tariffUsdPerKwh / last.h2, 1) + ' kWh', 'stack plus compression')] : []),
     tile('Hydrogen, last ' + winLabel, num(kg, 1) + ' kg', 'integrated from the samples'),
-    tile('Average power, last ' + winLabel, num(avgKw, 0) + ' kW', `${pct(avgKw / rated)} of the rating`));
+    tile('Average renewable input, last ' + winLabel, num(avgKw, 0) + ' kW', `${pct(avgKw / rated)} of the rating`));
 
   if (!force && live.hover) return;
 

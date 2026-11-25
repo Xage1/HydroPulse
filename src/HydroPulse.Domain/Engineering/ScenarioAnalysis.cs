@@ -63,6 +63,8 @@ public static class ScenarioAnalysis
             Grid = cfg.Grid with
             {
                 ImportTariffUsdPerKwh = cfg.Grid.ImportTariffUsdPerKwh * factor,
+                OffPeakImportTariffUsdPerKwh = cfg.Grid.OffPeakImportTariffUsdPerKwh * factor,
+                DemandChargeUsdPerKvaMonth = cfg.Grid.DemandChargeUsdPerKvaMonth * factor,
                 MaxImportPriceUsdPerKwh = cfg.Grid.MaxImportPriceUsdPerKwh * factor
             }
         };
@@ -75,17 +77,19 @@ public static class ScenarioAnalysis
 
         return new List<SensitivityBar>
         {
-            new("Electrolyzer capex", "-20%", "+20%",
-                Lcoh(cfg with { Finance = f with { ElectrolyzerCapexUsdPerKw = f.ElectrolyzerCapexUsdPerKw * 0.8 } }),
-                Lcoh(cfg with { Finance = f with { ElectrolyzerCapexUsdPerKw = f.ElectrolyzerCapexUsdPerKw * 1.2 } })),
+            // Low/high are the cited reference range (docs/SOURCES.md): IEA installed cost USD 1,000-2,500/kW.
+            new("Electrolyzer capex", "$1,000/kW", "$2,500/kW",
+                Lcoh(cfg with { Finance = f with { ElectrolyzerCapexUsdPerKw = 1000.0 } }),
+                Lcoh(cfg with { Finance = f with { ElectrolyzerCapexUsdPerKw = 2500.0 } })),
 
             new("Renewable capex", "-20%", "+20%",
                 Lcoh(cfg with { Finance = f with { PvCapexUsdPerKwp = f.PvCapexUsdPerKwp * 0.8, WindCapexUsdPerKw = f.WindCapexUsdPerKw * 0.8 } }),
                 Lcoh(cfg with { Finance = f with { PvCapexUsdPerKwp = f.PvCapexUsdPerKwp * 1.2, WindCapexUsdPerKw = f.WindCapexUsdPerKw * 1.2 } })),
 
-            new("Discount rate", $"{f.DiscountRate - 0.02:P0}", $"{f.DiscountRate + 0.02:P0}",
-                Lcoh(cfg with { Finance = f with { DiscountRate = f.DiscountRate - 0.02 } }),
-                Lcoh(cfg with { Finance = f with { DiscountRate = f.DiscountRate + 0.02 } })),
+            // IEA: 8.5-9% for Kenyan utility solar; IRENA assumes 12% for African wind.
+            new("Discount rate", "8%", "12%",
+                Lcoh(cfg with { Finance = f with { DiscountRate = 0.08 } }),
+                Lcoh(cfg with { Finance = f with { DiscountRate = 0.12 } })),
 
             new("Stack efficiency (kWh/kg)", "-5%", "+5%",
                 Lcoh(cfg with { Electrolyzer = cfg.Electrolyzer with { SpecificEnergyAtRatedKwhPerKg = cfg.Electrolyzer.SpecificEnergyAtRatedKwhPerKg * 0.95 } }),

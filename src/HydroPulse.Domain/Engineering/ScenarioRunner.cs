@@ -160,7 +160,7 @@ public static class ScenarioRunner
         }
 
         bool gridConnected = cfg.Mode == OperatingMode.GridConnected;
-        bool tariffAcceptable = grid.ImportTariffUsdPerKwh <= grid.MaxImportPriceUsdPerKwh;
+        double monthPeakImportKw = 0.0;
         double bank = 0.0;
         int prevMonth = weather.Samples[0].TimestampUtc.Month;
 
@@ -170,10 +170,13 @@ public static class ScenarioRunner
             if (month != prevMonth)
             {
                 FlushBank(ref bank, yr, grid);
+                ChargeDemand(ref monthPeakImportKw, yr, grid);
                 prevMonth = month;
             }
 
             double r = wind[i] + pvBase[i] * pvFactor;
+            double tariff = grid.TariffAt(weather.Samples[i].TimestampUtc);
+            bool tariffAcceptable = tariff <= grid.MaxImportPriceUsdPerKwh;
 
             double allowed;
             if (!gridConnected) allowed = r;
@@ -211,6 +214,7 @@ public static class ScenarioRunner
             yr.WaterLiters += d.WaterLitersPerHour;
             yr.MatchedHourlyKwh += Math.Min(c, r);
             yr.ImportKwh += import;
+            monthPeakImportKw = Math.Max(monthPeakImportKw, import);
 
             if (!gridConnected)
             {
@@ -222,7 +226,7 @@ public static class ScenarioRunner
                 switch (cfg.Matching)
                 {
                     case MatchingPolicy.None:
-                        yr.GridCostUsd += import * grid.ImportTariffUsdPerKwh - surplus * grid.ExportPriceUsdPerKwh;
+                        yr.GridCostUsd += import * tariff - surplus * grid.ExportPriceUsdPerKwh;
                         break;
                     case MatchingPolicy.Monthly:
                         bank = Math.Max(0.0, bank - import + surplus);
@@ -251,6 +255,7 @@ public static class ScenarioRunner
         }
 
         FlushBank(ref bank, yr, grid);
+        ChargeDemand(ref monthPeakImportKw, yr, grid);
         return yr;
     }
 
@@ -259,6 +264,14 @@ public static class ScenarioRunner
     {
         if (bank > 0) yr.GridCostUsd -= bank * grid.ExportPriceUsdPerKwh;
         bank = 0.0;
+    }
+
+    /// <summary>Demand charge on the month's peak hourly import (kW treated as kVA / power factor).</summary>
+    private static void ChargeDemand(ref double peakKw, YearResult yr, GridParameters grid)
+    {
+        if (grid.DemandChargeUsdPerKvaMonth > 0 && peakKw > 0)
+            yr.GridCostUsd += peakKw / grid.PowerFactor * grid.DemandChargeUsdPerKvaMonth;
+        peakKw = 0.0;
     }
 
     private static double SafeDiv(double a, double b) => b > 0 ? a / b : 0.0;

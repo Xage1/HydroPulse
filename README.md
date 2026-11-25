@@ -217,9 +217,9 @@ All values below are **placeholders** and must be replaced with cited or custome
 
 | Group | Setting | Default |
 |---|---|---|
-| Finance | Discount rate | 8% |
+| Finance | Discount rate | 9% (sourced, see `docs/SOURCES.md`) |
 | | Project life | 20 years |
-| | Electrolyzer capex | $1,500 / kW |
+| | Electrolyzer capex | $1,800 / kW (sourced range) |
 | | PV capex | $800 / kWp |
 | | Wind capex | $1,500 / kW |
 | | Other capex (BOP, install) | 10% of equipment |
@@ -231,6 +231,8 @@ All values below are **placeholders** and must be replaced with cited or custome
 | | Export price | $0 / kWh |
 | | Wheeling charge (monthly matching) | $0.02 / kWh |
 | | Max import power | unlimited |
+| | Off-peak tariff (optional) | none (flat tariff); off-peak hours 22:00-06:00 local, UTC+3 |
+| | Demand charge (optional) | $0 per kVA per month, power factor 0.95 |
 | Compression | Pressure | 30 to 350 bar, 3 stages |
 | Electrolyzer | Rated specific energy | 50 kWh/kg |
 | | Minimum load | 10% |
@@ -430,22 +432,24 @@ The EU RFNBO rules (Delegated Regulation (EU) 2023/1184 on additionality and tem
 
 ## Current results
 
-Nairobi at 10,000 kWp base capacity, 2024 weather. **All inputs are placeholders**: these are for comparing modes and checking the pipeline, not for a bid.
+Nairobi at 10,000 kWp base capacity, 2024 weather, defaults of 9% discount rate and $1,800/kW electrolyzer. Several inputs are still placeholders (see [`docs/SOURCES.md`](docs/SOURCES.md)), so these are for comparing modes and checking the pipeline, not for a bid.
 
-| Site | Mode | Best ratio | LCOH (USD/kg) |
-|---|---|---|---|
-| Nairobi solar | Off-grid | 2.00 | 7.84 |
-| | Grid, no matching | 1.75 | 7.11 |
-| | Grid, monthly | 5.00 | 5.90 |
-| | Grid, hourly | 2.00 | 7.84 |
-| Turkana wind | Off-grid | 3.00 | 10.12 |
-| | Grid, no matching | 0.50 | 7.90 |
-| | Grid, monthly | 3.75 | 9.19 |
-| | Grid, hourly | 3.00 | 10.12 |
-| Turkana hybrid | Off-grid | 3.00 | 8.21 |
-| | Grid, no matching | 2.25 | 7.39 |
-| | Grid, monthly | 4.50 | 7.28 |
-| | Grid, hourly | 3.00 | 8.21 |
+| Site | Mode | Best ratio | LCOH (USD/kg) | Electrolyzer CF |
+|---|---|---|---|---|
+| Nairobi solar | Off-grid | 2.00 | 9.10 | 33% |
+| | Grid, no matching | 1.75 | 7.54 | 100% |
+| | Grid, monthly | 5.00 | 6.53 | 89% |
+| | Grid, hourly | 2.00 | 9.10 | 33% |
+| Turkana wind | Off-grid | 3.25 | 11.27 | 52% |
+| | Grid, no matching | 0.50 | 8.30 | 100% |
+| | Grid, monthly | 3.75 | 10.15 | 66% |
+| | Grid, hourly | 3.25 | 11.27 | 52% |
+| Turkana hybrid | Off-grid | 3.00 | 9.23 | 51% |
+| | Grid, no matching | 2.25 | 7.88 | 100% |
+| | Grid, monthly | 4.50 | 8.04 | 82% |
+| | Grid, hourly | 3.00 | 9.23 | 51% |
+
+Earlier placeholders (8% and $1,500/kW) gave, for example, Nairobi off-grid $7.84/kg and Nairobi monthly $5.90/kg, so the sourced defaults raise cost by roughly $0.60-1.30/kg.
 
 Renewable capacity factors are about 18-19%. Hourly matching equals off-grid by construction, which is the point of the comparison: the dashboard shows what the compliance rule costs.
 
@@ -542,7 +546,7 @@ Notes:
 ## Limitations and honesty notes
 
 1. **The live plant is simulated.** Telemetry is produced by a worker that replays weather through the same dispatch logic. It is clearly tagged in the UI and in `GET /api/plant` (`source`).
-2. **Placeholder inputs.** Capex, opex, tariffs, discount rate, stack life and replacement cost are not sourced. Do not quote any LCOH figure externally until replaced with cited or customer values.
+2. **Placeholder inputs.** Some inputs now have a cited reference range, the rest are still placeholders. See [`docs/SOURCES.md`](docs/SOURCES.md) for exactly which. Do not quote any LCOH figure externally until the inputs are replaced with cited or customer values.
 3. **Weather is reanalysis, not measurements.** NASA POWER is gridded reanalysis and satellite data. Lake Turkana wind is probably **understated** by coarse reanalysis; on-site measurement or a resource assessment is required for a real project.
 4. **Single-year weather.** 2024 is repeated for the whole project life. No inter-annual variability.
 5. **PV uses horizontal irradiance** with no tilt, tracking, shading or inverter clipping model.
@@ -569,12 +573,12 @@ Notes:
 
 ## Roadmap
 
-- Rename the "Average power" tile to "Average renewable input".
 - Simulated clock on the live chart x-axis.
 - Buyer weather import (upload a CSV for any site) and a site picker beyond the two development sites.
 - Hybrid PV/wind mix optimiser.
 - Grid carbon-intensity model and certificate-aware modes.
-- Cited input table for the thesis (sources for every cost and technical parameter).
+- Finish the cited input table ([`docs/SOURCES.md`](docs/SOURCES.md)): stack life, replacement cost, opex and the other placeholders still need sources.
+- Tariff structure with demand charge and time-of-use price.
 - Real plant adapter (OPC UA or MQTT) replacing the simulator behind `Telemetry:Source`.
 - Docker image with `wwwroot` and weather data baked in.
 - Authentication and multi-plant support.

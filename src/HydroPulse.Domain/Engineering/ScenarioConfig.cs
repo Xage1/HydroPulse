@@ -28,9 +28,9 @@ public enum MatchingPolicy
 /// <summary>All defaults are PLACEHOLDERS to be replaced with cited or customer values.</summary>
 public sealed record FinancialParameters
 {
-    public double DiscountRate { get; init; } = 0.08;
+    public double DiscountRate { get; init; } = 0.09;   // IEA: 8.5-9% for Kenyan utility solar (docs/SOURCES.md)
     public int ProjectLifetimeYears { get; init; } = 20;
-    public double ElectrolyzerCapexUsdPerKw { get; init; } = 1500.0;
+    public double ElectrolyzerCapexUsdPerKw { get; init; } = 1800.0;   // between IEA China (500-1,100) and non-China (1,900-2,500)
     public double PvCapexUsdPerKwp { get; init; } = 800.0;
     public double WindCapexUsdPerKw { get; init; } = 1500.0;
 
@@ -59,6 +59,34 @@ public sealed record GridParameters
     public double WheelingFeeUsdPerKwh { get; init; } = 0.02;
 
     public double MaxImportKw { get; init; } = 1_000_000_000.0;
+
+    /// <summary>
+    /// Optional off-peak energy price. When null the tariff is flat (<see cref="ImportTariffUsdPerKwh"/> at all hours).
+    /// Off-peak hours are local clock hours [OffPeakStartHourLocal, OffPeakEndHourLocal), wrapping midnight.
+    /// The hours are PLACEHOLDERS: take them from the buyer's tariff schedule.
+    /// </summary>
+    public double? OffPeakImportTariffUsdPerKwh { get; init; } = null;
+    public int OffPeakStartHourLocal { get; init; } = 22;
+    public int OffPeakEndHourLocal { get; init; } = 6;
+
+    /// <summary>Weather timestamps are UTC; Kenya is UTC+3.</summary>
+    public int LocalUtcOffsetHours { get; init; } = 3;
+
+    /// <summary>Monthly demand charge on the highest hourly grid import of the month, in USD per kVA per month. 0 disables it.</summary>
+    public double DemandChargeUsdPerKvaMonth { get; init; } = 0.0;
+
+    public double PowerFactor { get; init; } = 0.95;
+
+    /// <summary>Energy price in force at the given UTC instant.</summary>
+    public double TariffAt(DateTime utc)
+    {
+        if (OffPeakImportTariffUsdPerKwh is not { } off) return ImportTariffUsdPerKwh;
+        int h = ((utc.Hour + LocalUtcOffsetHours) % 24 + 24) % 24;
+        bool offPeak = OffPeakStartHourLocal <= OffPeakEndHourLocal
+            ? h >= OffPeakStartHourLocal && h < OffPeakEndHourLocal
+            : h >= OffPeakStartHourLocal || h < OffPeakEndHourLocal;
+        return offPeak ? off : ImportTariffUsdPerKwh;
+    }
 }
 
 public sealed record CompressionParameters
