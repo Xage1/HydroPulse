@@ -14,6 +14,14 @@ public sealed record SensitivityBar(
     double? LcohLow,
     double? LcohHigh);
 
+/// <summary>One solar/wind split: the cheapest renewable-to-electrolyzer ratio for that split and what it costs.</summary>
+public sealed record MixPoint(
+    double PvShare,
+    double? BestRatio,
+    double? LcohUsdPerKg,
+    double ElectrolyzerCapacityFactor,
+    double HydrogenTonnes);
+
 public static class ScenarioAnalysis
 {
     /// <summary>Scales PV and wind together (keeping their mix) so that renewable capacity = ratio x electrolyzer rating.</summary>
@@ -48,6 +56,41 @@ public static class ScenarioAnalysis
         }
         return points;
     }
+
+    /// <summary>
+    /// Finds the cheapest split of renewable capacity between PV and wind. For every PV share (0 = all wind,
+    /// 1 = all solar) the ratio sweep runs and the best ratio is kept, so each point is the cheapest plant
+    /// with that split. The configuration's own PV/wind sizes are ignored; only the weather and the other
+    /// parameters are used.
+    /// </summary>
+    public static IReadOnlyList<MixPoint> OptimizeMix(
+        ScenarioConfig cfg, WeatherSeries weather, IEnumerable<double> pvShares, IReadOnlyList<double> ratios)
+    {
+        var points = new List<MixPoint>();
+        foreach (double share in pvShares)
+        {
+            if (share < 0.0 || share > 1.0) throw new ArgumentOutOfRangeException(nameof(pvShares), "PV shares must be between 0 and 1.");
+
+            // Capacities sum to 1, so ScaleRenewables turns the ratio directly into total renewable kW.
+            var split = cfg with
+            {
+                Pv = cfg.Pv with { CapacityKwp = share },
+                Wind = cfg.Wind with { CapacityKw = 1.0 - share }
+            };
+            var sweep = SweepRatio(split, weather, ratios);
+            double? best = BestRatio(sweep);
+            var at = best is null ? null : sweep.First(p => p.Ratio == best);
+            points.Add(new MixPoint(share, best, at?.LcohUsdPerKg, at?.ElectrolyzerCapacityFactor ?? 0.0, at?.HydrogenTonnes ?? 0.0));
+        }
+        return points;
+    }
+
+    /// <summary>The PV share with the lowest LCOH, or null if no split produced hydrogen.</summary>
+    public static double? BestPvShare(IReadOnlyList<MixPoint> mix) =>
+        mix.Where(p => p.LcohUsdPerKg.HasValue)
+           .OrderBy(p => p.LcohUsdPerKg!.Value)
+           .Select(p => (double?)p.PvShare)
+           .FirstOrDefault();
 
     /// <summary>The ratio with the lowest LCOH, or null if no point produced hydrogen.</summary>
     public static double? BestRatio(IReadOnlyList<SweepPoint> sweep) =>

@@ -65,6 +65,10 @@ var ratios = Enumerable.Range(2, 15).Select(i => i * 0.25)
     .ToArray();
 var scenarios = new List<object>();
 
+// Solar/wind split search for hybrid sites: PV share 0-100% in 10% steps, capacity ratio 0.5-8x in steps of 0.5.
+var pvShares = Enumerable.Range(0, 11).Select(i => i / 10.0).ToArray();
+var mixRatios = Enumerable.Range(1, 16).Select(i => i * 0.5).ToArray();
+
 Console.WriteLine();
 Console.WriteLine($"{"Scenario",-58} {"Ratio",5} {"LCOH $/kg",10} {"El. CF",7} {"RE CF",6} {"H2 t/yr",8} {"Sim.RE",7} {"Mon.RE",7}");
 
@@ -83,6 +87,21 @@ foreach (var site in sites)
             Wind = site.Wind
         };
 
+        // Sites with both solar and wind: find the best solar/wind split first, then size around it.
+        IReadOnlyList<MixPoint>? mix = null;
+        double? bestPvShare = null;
+        if (site.Pv.CapacityKwp > 0 && site.Wind.CapacityKw > 0)
+        {
+            double totalKw = site.Pv.CapacityKwp + site.Wind.CapacityKw;
+            mix = ScenarioAnalysis.OptimizeMix(baseCfg, site.Weather, pvShares, mixRatios);
+            bestPvShare = ScenarioAnalysis.BestPvShare(mix) ?? 0.5;
+            baseCfg = baseCfg with
+            {
+                Pv = baseCfg.Pv with { CapacityKwp = bestPvShare.Value * totalKw },
+                Wind = baseCfg.Wind with { CapacityKw = (1.0 - bestPvShare.Value) * totalKw }
+            };
+        }
+
         var sweep = ScenarioAnalysis.SweepRatio(baseCfg, site.Weather, ratios);
         double best = ScenarioAnalysis.BestRatio(sweep) ?? 1.5;
 
@@ -97,6 +116,8 @@ foreach (var site in sites)
             modeKey = mode.Key,
             mode = mode.Label,
             bestRatio = best,
+            bestPvShare,
+            mix,
             result,
             sweep,
             sensitivity
@@ -107,7 +128,8 @@ foreach (var site in sites)
         Console.WriteLine(
             $"{label,-58} {best,5:F2} {(result.Finance.LcohUsdPerKg?.ToString("F2") ?? "n/a"),10} " +
             $"{y.ElectrolyzerCapacityFactor,7:P0} {y.RenewableCapacityFactor,6:P0} {y.HydrogenTonnes,8:F0} " +
-            $"{y.SimultaneousRenewableShare,7:P0} {y.MonthlyMatchedShare,7:P0}{edge}");
+            $"{y.SimultaneousRenewableShare,7:P0} {y.MonthlyMatchedShare,7:P0}{edge}" +
+            (bestPvShare is { } share ? $"  [PV {share:P0} / wind {1 - share:P0}]" : ""));
     }
 }
 

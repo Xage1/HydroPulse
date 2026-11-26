@@ -555,6 +555,7 @@ function buildCards() {
   makeCard('monthly', 'Energy by month');
   makeCard('modes', 'What each operating mode costs');
   makeCard('sweep', 'Sizing: how much renewable capacity?');
+  makeCard('mix', 'Solar and wind split');
   makeCard('duration', 'Power duration curve');
   makeCard('tornado', 'What moves the cost');
 }
@@ -676,6 +677,36 @@ function renderSweep() {
   c.foot.textContent = (edge ? 'The best size is at the edge of the tested range, so the true optimum may be larger. ' : '') +
     (clipped ? 'Sizes costing more than 2.2 times the best are left off the chart (see the table). ' : '') +
     'Small plants waste the electrolyzer; large plants waste renewable energy. The curve shows the trade-off.';
+}
+
+function renderMix() {
+  const s = cur(), c = cards.mix, mix = s.mix;
+  c.el.style.display = mix ? '' : 'none';
+  if (!mix) return;
+  c.sub.textContent = 'LCOH for each split of renewable capacity between solar and wind, each at its own cheapest size';
+  legend(c.lg, [{ name: 'LCOH', color: C.re, kind: 'line' }]);
+  const pts = mix.filter(p => p.lcohUsdPerKg != null);
+  if (!pts.length) { c.plot.textContent = 'No hydrogen produced for any split.'; c.tbl.textContent = ''; return; }
+  const lo = Math.min(...pts.map(p => p.lcohUsdPerKg)), hi = Math.max(...pts.map(p => p.lcohUsdPerKg));
+  const bi = pts.findIndex(p => p.lcohUsdPerKg === lo);
+  const R = FX.rate, sc = niceScale(Math.max(0, (lo - (hi - lo) * .15) * R), (hi + (hi - lo) * .1) * R, 4);
+  panelChart(c.plot, {
+    aria: 'Levelized cost of hydrogen against the share of solar in the renewable capacity',
+    xs: pts.map(p => p.pvShare * 100), x0: 0, x1: 100, ml: Math.max(50, axisMoney(sc.max).length * 6.6 + 14), markers: true,
+    xTicks: [0, 25, 50, 75, 100].map(x => ({ x, label: x === 0 ? '0% (all wind)' : x === 100 ? '100% (all solar)' : x + '%' })),
+    panels: [{ title: `LCOH (${FX.code} per kg) against solar share of capacity`, h: 200, yMin: sc.min, yMax: sc.max, yFmt: v => axisMoney(v), series: [{ name: 'LCOH', color: C.re, vals: pts.map(p => p.lcohUsdPerKg * R) }] }],
+    highlight: { i: bi, text: `Best ${num(pts[bi].pvShare * 100, 0)}% solar · ${money(pts[bi].lcohUsdPerKg)}` },
+    tipTitle: i => `${num(pts[i].pvShare * 100, 0)}% solar, ${num(100 - pts[i].pvShare * 100, 0)}% wind`,
+    tipRows: i => [
+      { color: C.re, value: money(pts[i].lcohUsdPerKg), label: 'LCOH per kg' },
+      { color: null, value: num(pts[i].bestRatio, 1) + '× electrolyzer rating', label: 'Cheapest renewable size' },
+      { color: null, value: pct(pts[i].electrolyzerCapacityFactor), label: 'Electrolyzer utilisation' },
+      { color: null, value: num(pts[i].hydrogenTonnes, 0) + ' t/yr', label: 'Hydrogen' }]
+  });
+  table(c.tbl, ['Solar share', 'Wind share', `LCOH ${FX.code}/kg`, 'Cheapest size', 'Electrolyzer utilisation', 'Hydrogen t/yr'],
+    mix.map(p => [pct(p.pvShare), pct(1 - p.pvShare), money(p.lcohUsdPerKg), p.bestRatio != null ? num(p.bestRatio, 1) + '×' : 'n/a', pct(p.electrolyzerCapacityFactor), num(p.hydrogenTonnes, 0)]));
+  c.foot.textContent = 'The left edge is wind only and the right edge is solar only. All the other scenario charts use the best split shown here. ' +
+    'Solar and wind peak at different times of day, so a blend can keep the electrolyzer running longer for the same installed capacity.';
 }
 
 function renderDuration() {
@@ -1081,7 +1112,7 @@ function initCurrency() {
   else setCurrency(v, v === 'USD' ? 1 : (FXD ? FXD.rates[v] : 1));
   renderFxNote();
 }
-function redrawCharts() { if (state.view === 'live') { renderLive(true); return; } renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderDuration(); renderTornado(); }
+function redrawCharts() { if (state.view === 'live') { renderLive(true); return; } renderWeek(); renderMonthly(); renderModes(); renderSweep(); renderMix(); renderDuration(); renderTornado(); }
 
 function renderAll() {
   if (state.view === 'live') { renderLive(true); return; }

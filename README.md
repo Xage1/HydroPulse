@@ -118,7 +118,7 @@ HydroPulse/
 │     ├─ Hubs/TelemetryHub          SignalR hub at /hubs/telemetry
 │     ├─ Workers/                   H2TelemetrySimulationWorker, ReplaySetup
 │     └─ wwwroot/                   Generated dashboard + SignalR client (git-ignored)
-├─ tests/HydroPulse.Domain.Tests/   82 xUnit tests
+├─ tests/HydroPulse.Domain.Tests/   88 xUnit tests
 ├─ tools/HydroPulse.ScenarioRunner/ Console tool that runs all scenarios and builds the dashboard
 │  ├─ Program.cs, FxRates.cs, LiveAssets.cs
 │  └─ dashboard.template.html       Vanilla JS + SVG dashboard source
@@ -156,7 +156,7 @@ cd F:\devops\HydroPulse
 
 # 1. Build and test
 dotnet build
-dotnet test                      # expect 82 passing
+dotnet test                      # expect 88 passing
 
 # 2. Generate results and the dashboard
 dotnet run --project tools\HydroPulse.ScenarioRunner
@@ -440,6 +440,7 @@ Year 1 is simulated hourly from weather. Later years apply PV degradation and st
 
 ### Sizing sweep and sensitivity
 
+- **Solar/wind split.** For sites with both sources, `OptimizeMix` tries solar shares from 0% to 100% in 10% steps, finds the cheapest capacity ratio for each (0.5x to 8x), and keeps the cheapest split. The scenario then sizes around that split. The dashboard shows the whole curve in the *Solar and wind split* card.
 - **Sweep.** `ScaleRenewables` scales PV and wind together, keeping their mix, so that renewable capacity = ratio x electrolyzer rating. Ratios 0.5 to 4.0 in steps of 0.25, then 4.5 to 8.0 in steps of 0.5.
 - **Tornado.** Each key assumption is moved low and high, one at a time, and the LCOH change is recorded.
 
@@ -525,7 +526,7 @@ The SignalR browser client is saved locally at `wwwroot/lib/signalr.min.js` (Mic
 dotnet test
 ```
 
-82 xUnit tests in `tests/HydroPulse.Domain.Tests`:
+88 xUnit tests in `tests/HydroPulse.Domain.Tests`:
 
 | Suite | Covers |
 |---|---|
@@ -535,6 +536,7 @@ dotnet test
 | `RenewableReplayTests` | Interpolation, year wrap, start time |
 | `PlantDispatchTests` | Saturation, part-load, standby, compression parasitic load |
 | `GridTariffTests` | Off-peak window, hour-by-hour import gating, demand charge |
+| `MixOptimizerTests` | Solar/wind split search: end points, best share, validation |
 | `MeasuredWeatherTests` | Measured CSV import, height conversion, gap and column validation |
 
 The scenario runner's printed table is also a regression check: refactors should leave it unchanged.
@@ -583,7 +585,7 @@ Notes:
 4. **Single-year weather.** 2024 is repeated for the whole project life. No inter-annual variability.
 5. **PV uses horizontal irradiance** with no tilt, tracking, shading or inverter clipping model.
 6. **Wind** uses a generic power curve, not a turbine-specific one.
-7. **Hybrid mix is fixed at 50/50.** No optimiser for the PV/wind split yet.
+7. **Hybrid mix** is optimised in 10% steps of solar share (0-100%) with the capacity ratio searched at each step. The search is coarse, assumes both sources share one site's weather, and ignores land, grid-connection and per-source cost differences beyond the capex inputs.
 8. **Compression** uses an ideal-gas model; real-gas effects above ~350 bar are ignored. Storage and dispensing are not modelled.
 9. **Grid carbon intensity is not modelled.** "No matching" hydrogen is cheaper but not certified green.
 10. **Hourly dispatch** in scenarios. Sub-hourly ramping, start-up times and transient effects are not modelled.
@@ -606,7 +608,6 @@ Notes:
 ## Roadmap
 
 - Buyer weather import via a browser upload (the file-based `data/sites.json` import exists).
-- Hybrid PV/wind mix optimiser.
 - Grid carbon-intensity model and certificate-aware modes.
 - Finish the cited input table ([`docs/SOURCES.md`](docs/SOURCES.md)): stack life, replacement cost, opex and the other placeholders still need sources.
 - Tariff structure with demand charge and time-of-use price.
