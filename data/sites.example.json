@@ -1,0 +1,18 @@
+{
+  // Copy to data/sites.json to add buyer sites. Built-in NASA sites stay unless includeBuiltIn is false.
+  // Weather files are looked up in data/weather unless weatherFile is an absolute path.
+  "includeBuiltIn": true,
+  "sites": [
+    {
+      "label": "Turkana measured wind",
+      "weatherFile": "turkana-measured-2024.csv",
+      "format": "measured",
+      "elevationM": 873,
+      "measuredHeightM": 80,
+      "shearExponent": 0.14,
+      "pvKwp": 0,
+      "windKw": 10000,
+      "dataNote": "met mast, 80 m"
+    }
+  ]
+}

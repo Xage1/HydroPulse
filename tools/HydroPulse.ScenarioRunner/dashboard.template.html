@@ -777,7 +777,15 @@ function renderFilters() {
 
 // ---------- live plant (SignalR) ----------
 const LIVE_WINDOWS = [[300, '5 min'], [900, '15 min'], [3600, '1 hour']];
-const live = { started: false, plant: null, recs: [], ids: new Set(), win: 300, hover: false, conn: null, state: 'connecting', raf: 0, cap: 1300 };
+const live = { started: false, plant: null, recs: [], ids: new Set(), win: 300, hover: false, conn: null, state: 'connecting', raf: 0, cap: 1300,
+  axis: 'sim', anchor: null, axisSeg: null };
+// Simulated weather time for a real timestamp, from the newest replay clock message (constant replay speed).
+function simAt(t) { return live.anchor ? live.anchor.simMs - (live.anchor.t - t) * live.anchor.speed : null; }
+function simShort(ms, withDay) {
+  return new Date(ms).toLocaleString('en-GB', withDay
+    ? { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
+    : { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
+}
 
 function setConn(state, text) {
   live.state = state;
@@ -845,6 +853,7 @@ async function connectLive() {
       live.plant = await r.json();
       live.cap = Math.min(2000, Math.ceil(3600 / Math.max(1, live.plant.intervalSeconds)) + 60);
       setReplay(live.plant.replay);
+      if (live.axisSeg) live.axisSeg.hidden = !live.plant.replay;
       const tag = $('#liveSource'); tag.hidden = false;
       tag.textContent = /^simulated$/i.test(live.plant.source) ? 'Simulated data, not a real plant' : 'Source: ' + live.plant.source;
     }
@@ -857,6 +866,7 @@ async function connectLive() {
       setReplay(r);
       const newest = live.recs[live.recs.length - 1];
       if (newest && !newest.sim) newest.sim = r.simulatedUtc;
+      if (newest) live.anchor = { t: newest.t, simMs: Date.parse(r.simulatedUtc), speed: r.speedUp };
     });
     conn.onreconnecting(() => setConn('reconnecting', 'Reconnecting'));
     conn.onreconnected(async () => {
@@ -894,6 +904,15 @@ function buildLiveCards() {
     seg.append(b);
   });
   c.extra.append(seg);
+  const axisSeg = html('div', { class: 'seg', role: 'group', 'aria-label': 'Time axis' });
+  axisSeg.hidden = true;
+  [['sim', 'Simulated time'], ['real', 'Real time']].forEach(([k, label]) => {
+    const b = html('button', { type: 'button', text: label, 'aria-pressed': String(live.axis === k) });
+    b.addEventListener('click', () => { live.axis = k; [...axisSeg.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); renderLive(true); });
+    axisSeg.append(b);
+  });
+  live.axisSeg = axisSeg;
+  c.extra.append(axisSeg);
   // Do not redraw under the cursor or while the chart has keyboard focus, or the tooltip would vanish every few seconds.
   c.plot.addEventListener('pointerenter', () => { live.hover = true; });
   c.plot.addEventListener('pointerleave', () => { live.hover = false; scheduleLive(); });
@@ -941,23 +960,32 @@ function renderLive(force) {
   if (!force && live.hover) return;
 
   // chart: break the line where samples are missing
+  const useSim = live.axis === 'sim' && !!live.anchor && !!(plant && plant.replay);
+  const speed = useSim ? live.anchor.speed : 1;
+  const simEnd = useSim ? simAt(tEnd) : 0;
+  const xOf = t => useSim ? (simAt(t) - simEnd) / 1000 : (t - tEnd) / 1000;     // axis units: seconds (simulated or real)
+  const span = live.win * speed;                                               // window width in axis units
   const xs = [], kw = [], h2 = [];
   win.forEach((r, i) => {
-    if (i && r.t - win[i - 1].t > every * 2500) { xs.push((win[i - 1].t + every * 1000 - tEnd) / 1000); kw.push(null); h2.push(null); }
-    xs.push((r.t - tEnd) / 1000); kw.push(r.kw); h2.push(r.h2);
+    if (i && r.t - win[i - 1].t > every * 2500) { xs.push(xOf(win[i - 1].t + every * 1000)); kw.push(null); h2.push(null); }
+    xs.push(xOf(r.t)); kw.push(r.kw); h2.push(r.h2);
   });
-  const tickStep = live.win / 5, durLabel = sec => sec % 60 === 0 ? (sec / 60) + ' min' : sec + ' s';
+  const tickStep = span / 5, durLabel = sec => sec >= 7200 ? (Math.round(sec / 360) / 10) + ' h' : sec % 60 === 0 ? (sec / 60) + ' min' : sec + ' s';
   const narrow = c.plot.clientWidth < 520;
-  const xTicks = [0, 1, 2, 3, 4, 5].filter(k => !narrow || k % 2 === 1).map(k => ({ x: -live.win + k * tickStep, label: k === 5 ? 'now' : '−' + durLabel(live.win - k * tickStep) }));
+  const withDay = span > 18 * 3600;
+  const xTicks = [0, 1, 2, 3, 4, 5].filter(k => !narrow || k % 2 === 1).map(k => ({
+    x: -span + k * tickStep,
+    label: useSim ? simShort(simEnd - (span - k * tickStep) * 1000, withDay) : (k === 5 ? 'now' : '\u2212' + durLabel(span - k * tickStep))
+  }));
   const kwMax = Math.max(rated, ...win.map(r => r.kw)), h2Max = Math.max(1, ...win.map(r => r.h2)) * 1.05;
-  c.sub.textContent = `${plant ? plant.name : 'Plant'} · ${plant ? plant.source : ''} · last ${winLabel}, one sample every ${every} s · times in your local time`;
+  c.sub.textContent = `${plant ? plant.name : 'Plant'} · ${plant ? plant.source : ''} · last ${winLabel}, one sample every ${every} s · ${useSim ? 'time axis shows simulated weather time (UTC)' : 'times in your local time'}`;
   legend(c.lg, [{ name: 'Renewable power input', color: C.re, kind: 'line' }, { name: 'Hydrogen output', color: C.h2, kind: 'line' }]);
   const idxAt = i => { // map a chart index (with inserted gap points) back to a sample
     let n = -1; for (let k = 0; k <= i && k < xs.length; k++) if (kw[k] != null) n++; return win[Math.max(0, n)];
   };
   panelChart(c.plot, {
     aria: 'Live renewable power input and hydrogen output',
-    xs, x0: -live.win, x1: 0, xTicks,
+    xs, x0: -span, x1: 0, xTicks,
     panels: [
       { title: `Power (kW). Grey line: rating, ${num(rated, 0)} kW`, h: 170, yMax: kwMax, yFmt: v => num(v, 0), series: [{ name: 'Renewable power input', color: C.re, vals: kw, area: true }], ref: { v: rated } },
       { title: 'Hydrogen output (kg/h)', h: 110, yMax: h2Max, yFmt: v => num(v, v < 10 && v % 1 ? 1 : 0), nt: 3, series: [{ name: 'Hydrogen output', color: C.h2, vals: h2, area: true }] }],
@@ -968,10 +996,11 @@ function renderLive(force) {
       { color: 'var(--muted)', value: num(r.water, 0) + ' L/h', label: 'Water' },
       { color: 'var(--muted)', value: money(r.cost) + '/h', label: 'Electricity cost' },
       { color: 'var(--muted)', value: r.status, label: 'Status' },
-      ...(r.sim ? [{ color: 'var(--muted)', value: simClock(r.sim), label: 'Simulated time' }] : [])]; }
+      ...(r.sim || live.anchor ? [{ color: 'var(--muted)', value: simClock(r.sim || new Date(simAt(r.t)).toISOString()), label: 'Simulated time' }] : [])]; }
   });
-  table(c.tbl, ['Time', 'Power kW', 'Hydrogen kg/h', 'Water L/h', `Electricity ${FX.code}/h`, 'Status'],
-    rec.slice(-100).reverse().map(r => [clock(r.t), num(r.kw, 0), num(r.h2, 1), num(r.water, 0), money(r.cost), r.status]));
+  const simCol = !!(plant && plant.replay && live.anchor);
+  table(c.tbl, ['Time', ...(simCol ? ['Simulated time (UTC)'] : []), 'Power kW', 'Hydrogen kg/h', 'Water L/h', `Electricity ${FX.code}/h`, 'Status'],
+    rec.slice(-100).reverse().map(r => [clock(r.t), ...(simCol ? [simShort(simAt(r.t), true)] : []), num(r.kw, 0), num(r.h2, 1), num(r.water, 0), money(r.cost), r.status]));
   c.foot.textContent = 'The chart pauses while you hover over it or step through it with the arrow keys, and catches up when you move away.';
 }
 

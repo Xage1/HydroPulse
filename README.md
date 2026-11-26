@@ -118,7 +118,7 @@ HydroPulse/
 │     ├─ Hubs/TelemetryHub          SignalR hub at /hubs/telemetry
 │     ├─ Workers/                   H2TelemetrySimulationWorker, ReplaySetup
 │     └─ wwwroot/                   Generated dashboard + SignalR client (git-ignored)
-├─ tests/HydroPulse.Domain.Tests/   61 xUnit tests
+├─ tests/HydroPulse.Domain.Tests/   82 xUnit tests
 ├─ tools/HydroPulse.ScenarioRunner/ Console tool that runs all scenarios and builds the dashboard
 │  ├─ Program.cs, FxRates.cs, LiveAssets.cs
 │  └─ dashboard.template.html       Vanilla JS + SVG dashboard source
@@ -156,18 +156,20 @@ cd F:\devops\HydroPulse
 
 # 1. Build and test
 dotnet build
-dotnet test                      # expect 61 passing
+dotnet test                      # expect 82 passing
 
 # 2. Generate results and the dashboard
 dotnet run --project tools\HydroPulse.ScenarioRunner
 #   writes out\results.json, out\dashboard.html
 #   and src\HydroPulse.Api\wwwroot\index.html (+ lib\signalr.min.js)
 
-# 3. Start the database (if not already running)
+# 3. Start the database (host port 5433) and create the tables
 docker compose up -d postgres
 
 # 4. Store the connection password in user-secrets (never in git)
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=hydropulse;Username=postgres;Password=<your-password>" --project src\HydroPulse.Api
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5433;Database=hydropulse;Username=postgres;Password=<the POSTGRES_PASSWORD from docker-compose.yml>" --project src\HydroPulse.Api
+
+dotnet ef database update --project src\HydroPulse.Infrastructure --startup-project src\HydroPulse.Api
 
 # 5. Run the API (serves the dashboard and the live feed)
 dotnet run --project src\HydroPulse.Api --launch-profile http
@@ -204,6 +206,32 @@ https://power.larc.nasa.gov/api/temporal/hourly/point?parameters=ALLSKY_SFC_SW_D
 ```
 
 Save the result as `data/weather/<site>-2024.csv`. For a new buyer site, change longitude and latitude and add a site entry.
+
+### Adding a buyer site or measured weather
+
+Create `data/sites.json` (start from `data/sites.example.json`) and re-run the scenario runner. Each entry adds a site to every operating mode, with its own sizing sweep and tornado. The built-in NASA sites stay unless `"includeBuiltIn": false`.
+
+```json
+{
+  "includeBuiltIn": true,
+  "sites": [
+    { "label": "Turkana measured wind", "weatherFile": "turkana-measured-2024.csv", "format": "measured",
+      "elevationM": 873, "measuredHeightM": 80, "shearExponent": 0.14,
+      "pvKwp": 0, "windKw": 10000, "dataNote": "met mast, 80 m" }
+  ]
+}
+```
+
+`format` is `nasa` (a NASA POWER CSV) or `measured`. A measured CSV needs these columns (names are case-insensitive, `#` lines are skipped):
+
+| Column | Required | Meaning |
+|---|---|---|
+| `timestamp_utc` | yes | ISO 8601, e.g. `2024-01-01T00:00:00Z`. Strictly hourly, ascending, no gaps. |
+| `wind_speed_ms` | yes | Hourly mean wind speed at `measuredHeightM`. |
+| `ghi_w_m2` | no | Global horizontal irradiance, hourly mean. |
+| `temp_c` | no | Air temperature. |
+
+Blank, `NaN` or `-999` cells are carried forward from the previous hour and reported as "missing values filled". Measured speeds are converted to 50 m and 10 m with a power-law shear exponent so the existing wind model gives the same hub-height speed as your measurement. A site with an incomplete year (gaps or fewer than 8,760 hours) is rejected or should be gap-filled first, because the 20-year model repeats one year. The dashboard's data-source note lists which sites use customer data.
 
 ---
 
@@ -327,7 +355,7 @@ The Live tab connects to the SignalR hub and shows what the plant is doing now:
 - Connection pill, a permanent **"Simulated data, not a real plant"** tag, and a replay pill showing the replayed site, source and simulated date and time.
 - Hero **hydrogen production (kg/h)**.
 - Six tiles, including **Energy per kg** (stack plus compression), renewable input, water use and electricity cost per hour.
-- A live chart with **5 min / 15 min / 1 hour** windows and a table twin.
+- A live chart with **5 min / 15 min / 1 hour** windows and a table twin. While replaying, a **Simulated time / Real time** switch chooses the x-axis: simulated shows the weather clock (UTC) the plant is replaying, real shows minutes before now. The table gains a simulated-time column.
 
 On load it fetches history from `GET /api/telemetry?limit=N`, then appends `ReceiveTelemetry` events.
 
@@ -497,7 +525,7 @@ The SignalR browser client is saved locally at `wwwroot/lib/signalr.min.js` (Mic
 dotnet test
 ```
 
-61 xUnit tests in `tests/HydroPulse.Domain.Tests`:
+82 xUnit tests in `tests/HydroPulse.Domain.Tests`:
 
 | Suite | Covers |
 |---|---|
@@ -506,6 +534,8 @@ dotnet test
 | `ScenarioRunnerTests` | Modes, matching rules, cash flows, reproducibility |
 | `RenewableReplayTests` | Interpolation, year wrap, start time |
 | `PlantDispatchTests` | Saturation, part-load, standby, compression parasitic load |
+| `GridTariffTests` | Off-peak window, hour-by-hour import gating, demand charge |
+| `MeasuredWeatherTests` | Measured CSV import, height conversion, gap and column validation |
 
 The scenario runner's printed table is also a regression check: refactors should leave it unchanged.
 
@@ -517,7 +547,7 @@ The scenario runner's printed table is also a regression check: refactors should
 
 | Service | Container | Port |
 |---|---|---|
-| `postgres` | `hydropulse_db` | 5432 |
+| `postgres` | `hydropulse_db` | 5433 to 5432 (host port 5433, so it cannot clash with a local PostgreSQL on 5432) |
 | `api` | `hydropulse_api` | 5196 to 8080 |
 
 Notes:
@@ -531,6 +561,8 @@ Notes:
 
 | Symptom | Cause and fix |
 |---|---|
+| `password authentication failed` (28P01) | The password in user-secrets does not match `POSTGRES_PASSWORD` in `docker-compose.yml`, or you saved a placeholder. Re-run `dotnet user-secrets set` with the real value. |
+| EF says "database is already up to date" but the container is empty | You are connected to a different PostgreSQL. A native Windows PostgreSQL service on port 5432 takes `localhost` connections ahead of Docker. Check with `Get-NetTCPConnection -LocalPort 5432 -State Listen`. This project uses host port **5433** for the container for that reason. |
 | `address already in use` on 5196 | The `hydropulse_api` container or an old API process holds the port. `docker stop hydropulse_api`, or `Get-NetTCPConnection -LocalPort 5196` then `Stop-Process -Id <pid>`. |
 | Build fails: DLL locked | An old API process is still running. Stop it, then rebuild. |
 | `Expand-Archive` cannot find the zip | The browser saved it under a different name or folder. Use `Get-ChildItem $HOME\Downloads -Filter *.zip` to locate it. |
@@ -555,7 +587,7 @@ Notes:
 8. **Compression** uses an ideal-gas model; real-gas effects above ~350 bar are ignored. Storage and dispensing are not modelled.
 9. **Grid carbon intensity is not modelled.** "No matching" hydrogen is cheaper but not certified green.
 10. **Hourly dispatch** in scenarios. Sub-hourly ramping, start-up times and transient effects are not modelled.
-11. **Live chart x-axis** shows real time, not the simulated clock; the replay pill shows simulated time.
+11. **Simulated-time axis is estimated** from the replay speed and the newest clock message. If the API restarts inside the visible window, older points can be mislabelled until they scroll out.
 12. **Currency** conversion is display-only and uses a single spot rate, with no inflation or forward FX.
 
 ---
@@ -573,8 +605,7 @@ Notes:
 
 ## Roadmap
 
-- Simulated clock on the live chart x-axis.
-- Buyer weather import (upload a CSV for any site) and a site picker beyond the two development sites.
+- Buyer weather import via a browser upload (the file-based `data/sites.json` import exists).
 - Hybrid PV/wind mix optimiser.
 - Grid carbon-intensity model and certificate-aware modes.
 - Finish the cited input table ([`docs/SOURCES.md`](docs/SOURCES.md)): stack life, replacement cost, opex and the other placeholders still need sources.

@@ -27,12 +27,29 @@ var turkana = Load("Lake Turkana", "turkana-2024.csv");
 // Demo plant: 10 MW electrolyzer. Renewable capacity is sized by the sweep below.
 var electrolyzer = new ElectrolyzerParameters { RatedPowerKw = 10_000 };
 
-var sites = new (string Label, WeatherSeries Weather, PvParameters Pv, WindParameters Wind)[]
+var siteList = new List<(string Label, WeatherSeries Weather, PvParameters Pv, WindParameters Wind)>
 {
     ("Nairobi solar",       nairobi, new PvParameters { CapacityKwp = 10_000 }, new WindParameters()),
     ("Lake Turkana wind",   turkana, new PvParameters(), new WindParameters { CapacityKw = 10_000 }),
     ("Lake Turkana hybrid", turkana, new PvParameters { CapacityKwp = 5_000 }, new WindParameters { CapacityKw = 5_000 }),
 };
+
+// Optional buyer sites from data/sites.json (measured or NASA weather).
+var siteFile = SiteFile.Load(root);
+var customNotes = new List<string>();
+if (siteFile is not null)
+{
+    if (!siteFile.IncludeBuiltIn) siteList.Clear();
+    foreach (var entry in siteFile.Sites)
+    {
+        var w = SiteFile.LoadWeather(weatherDir, entry);
+        Console.WriteLine($"Loaded {entry.Label} ({entry.Format}): {w.Samples.Count} hours, {w.FilledMissingValues} missing values filled");
+        siteList.Add((entry.Label, w, new PvParameters { CapacityKwp = entry.PvKwp }, new WindParameters { CapacityKw = entry.WindKw }));
+        customNotes.Add($"{entry.Label}: {(entry.Format.Equals("measured", StringComparison.OrdinalIgnoreCase) ? "customer measured data" : "NASA POWER")}"
+            + (string.IsNullOrWhiteSpace(entry.DataNote) ? "" : $" ({entry.DataNote})"));
+    }
+}
+var sites = siteList.ToArray();
 
 var modes = new (string Key, string Label, OperatingMode Mode, MatchingPolicy Matching)[]
 {
@@ -99,7 +116,8 @@ var fx = await FxRates.LoadAsync(Path.Combine(root, "data", "fx-cache.json"));
 var output = new
 {
     generatedUtc = DateTime.UtcNow,
-    weatherSource = "NASA POWER hourly (CERES SYN1deg irradiance, MERRA-2 wind/temperature), year 2024, UTC",
+    weatherSource = "NASA POWER hourly (CERES SYN1deg irradiance, MERRA-2 wind/temperature), year 2024, UTC"
+        + (customNotes.Count > 0 ? ". Buyer sites: " + string.Join("; ", customNotes) : ""),
     note = "All technical and financial defaults are placeholders; replace with cited or customer values.",
     assumptions = new ScenarioConfig { Electrolyzer = electrolyzer },
     fx,
