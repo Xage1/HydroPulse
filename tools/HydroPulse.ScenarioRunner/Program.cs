@@ -37,6 +37,8 @@ var siteList = new List<(string Label, WeatherSeries Weather, PvParameters Pv, W
 // Optional buyer sites from data/sites.json (measured or NASA weather).
 var siteFile = SiteFile.Load(root);
 var customNotes = new List<string>();
+var measuredLabels = new HashSet<string>();
+var customDataNotes = new Dictionary<string, string>();
 if (siteFile is not null)
 {
     if (!siteFile.IncludeBuiltIn) siteList.Clear();
@@ -45,11 +47,27 @@ if (siteFile is not null)
         var w = SiteFile.LoadWeather(weatherDir, entry);
         Console.WriteLine($"Loaded {entry.Label} ({entry.Format}): {w.Samples.Count} hours, {w.FilledMissingValues} missing values filled");
         siteList.Add((entry.Label, w, new PvParameters { CapacityKwp = entry.PvKwp }, new WindParameters { CapacityKw = entry.WindKw }));
+        if (entry.Format.Equals("measured", StringComparison.OrdinalIgnoreCase)) measuredLabels.Add(entry.Label);
+        if (!string.IsNullOrWhiteSpace(entry.DataNote)) customDataNotes[entry.Label] = entry.DataNote!;
         customNotes.Add($"{entry.Label}: {(entry.Format.Equals("measured", StringComparison.OrdinalIgnoreCase) ? "customer measured data" : "NASA POWER")}"
             + (string.IsNullOrWhiteSpace(entry.DataNote) ? "" : $" ({entry.DataNote})"));
     }
 }
 var sites = siteList.ToArray();
+
+// Per-site weather data quality, shown on the dashboard next to any scenario that uses wind.
+const string TurkanaWindNote =
+    "A 310 MW wind plant at Lake Turkana expects about 1,250 GWh a year, roughly a 46% capacity factor by our arithmetic, " +
+    "far above what this data gives, so the wind speeds here are probably too low.";
+var siteData = sites.ToDictionary(
+    st => st.Label,
+    st => new
+    {
+        kind = measuredLabels.Contains(st.Label) ? "measured" : "reanalysis",
+        meanWind50mMs = Math.Round(st.Weather.Samples.Average(x => x.WindSpeed50mMs), 2),
+        note = customDataNotes.TryGetValue(st.Label, out var dn) ? dn
+             : (!measuredLabels.Contains(st.Label) && st.Label.Contains("Turkana", StringComparison.OrdinalIgnoreCase) ? TurkanaWindNote : null)
+    });
 
 var modes = new (string Key, string Label, OperatingMode Mode, MatchingPolicy Matching)[]
 {
@@ -143,6 +161,7 @@ var output = new
     note = "All technical and financial defaults are placeholders; replace with cited or customer values.",
     assumptions = new ScenarioConfig { Electrolyzer = electrolyzer },
     fx,
+    siteData,
     scenarios
 };
 

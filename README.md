@@ -473,10 +473,12 @@ Nairobi at 10,000 kWp base capacity, 2024 weather, defaults of 9% discount rate 
 | | Grid, no matching | 0.50 | 8.30 | 100% |
 | | Grid, monthly | 3.75 | 10.15 | 66% |
 | | Grid, hourly | 3.25 | 11.27 | 52% |
-| Turkana hybrid | Off-grid | 3.00 | 9.23 | 51% |
-| | Grid, no matching | 2.25 | 7.88 | 100% |
-| | Grid, monthly | 4.50 | 8.04 | 82% |
-| | Grid, hourly | 3.00 | 9.23 | 51% |
+| Turkana hybrid (best split: 100% solar) | Off-grid | 2.00 | 8.81 | 34% |
+| | Grid, no matching | 1.75 | 7.41 | 100% |
+| | Grid, monthly | 4.50 | 6.26 | 88% |
+| | Grid, hourly | 2.00 | 8.81 | 34% |
+
+> **Do not quote the Turkana wind or hybrid rows.** The solar/wind optimiser chooses 100% solar at Turkana in every mode, which says the wind input is too weak to earn any share. NASA POWER gives a mean 50 m wind speed of only 6.59 m/s for the file used here and an 18% wind capacity factor, while the 310 MW Lake Turkana Wind Power plant expects about 1,250 GWh a year, roughly a 46% capacity factor (our arithmetic from that figure). The dashboard shows a data-caution note on every wind or hybrid scenario. Replace the input with measured data via `data/sites.json`.
 
 Earlier placeholders (8% and $1,500/kW) gave, for example, Nairobi off-grid $7.84/kg and Nairobi monthly $5.90/kg, so the sourced defaults raise cost by roughly $0.60-1.30/kg.
 
@@ -581,7 +583,7 @@ Notes:
 
 1. **The live plant is simulated.** Telemetry is produced by a worker that replays weather through the same dispatch logic. It is clearly tagged in the UI and in `GET /api/plant` (`source`).
 2. **Placeholder inputs.** Some inputs now have a cited reference range, the rest are still placeholders. See [`docs/SOURCES.md`](docs/SOURCES.md) for exactly which. Do not quote any LCOH figure externally until the inputs are replaced with cited or customer values.
-3. **Weather is reanalysis, not measurements.** NASA POWER is gridded reanalysis and satellite data. Lake Turkana wind is probably **understated** by coarse reanalysis; on-site measurement or a resource assessment is required for a real project.
+3. **Weather is reanalysis, not measurements.** NASA POWER is gridded reanalysis and satellite data. Lake Turkana wind is **understated**: the file's mean 50 m wind speed is 6.59 m/s and the modelled wind capacity factor is 18%, against about 46% expected by the operating Lake Turkana Wind Power plant (derived from its published 310 MW and 1,250 GWh a year). On-site measurement or a resource assessment is required for a real project.
 4. **Single-year weather.** 2024 is repeated for the whole project life. No inter-annual variability.
 5. **PV uses horizontal irradiance** with no tilt, tracking, shading or inverter clipping model.
 6. **Wind** uses a generic power curve, not a turbine-specific one.

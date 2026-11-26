@@ -768,9 +768,16 @@ function renderSummary() {
     tile('Energy per kg', num(y.specificConsumptionKwhPerKg, 1) + ' kWh', 'stack plus compression'),
     tile('Plant', num(p.electrolyzerMw, 0) + ' MW', `electrolyzer + ${re} (${num(p.renewableToElectrolyzerRatio, 2)}×)`),
     tile('Total capex', bigMoney(f.totalCapexUsd), `${f.stackReplacements} stack replacement${f.stackReplacements === 1 ? '' : 's'} in 20 years`));
-  const note = $('#windNote');
+  const note = $('#windNote'), sd = (D.siteData || {})[s.site];
   note.hidden = !(p.windMw > 0);
-  note.textContent = 'Wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid). Reanalysis can understate local wind in complex terrain, so treat wind results as conservative until measured site data is loaded.';
+  if (!note.hidden) {
+    const mean = sd && sd.meanWind50mMs != null ? ` Mean 50 m wind speed in this data: ${num(sd.meanWind50mMs, 1)} m/s.` : '';
+    const extra = sd && sd.note ? ' ' + sd.note : '';
+    note.textContent = sd && sd.kind === 'measured'
+      ? 'Wind data: customer measured.' + mean + extra
+      : 'Data caution: wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid), not site measurements.' + mean + extra +
+        ' Treat wind and hybrid results as conservative until measured site data is loaded.';
+  }
 }
 
 function renderAssumptions() {
