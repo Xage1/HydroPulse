@@ -17,6 +17,12 @@ public sealed record SiteEntry
     public double PvKwp { get; init; }
     public double WindKw { get; init; }
     public string? DataNote { get; init; }
+
+    /// <summary>
+    /// Optional. Rescales the wind speeds so the mean 50 m speed equals this value (m/s), keeping the hourly pattern.
+    /// For correcting a reanalysis series against a published site mean. Convert a mean quoted at another height to 50 m first.
+    /// </summary>
+    public double? TargetMeanWind50mMs { get; init; }
 }
 
 public sealed record SiteFileModel
@@ -41,6 +47,7 @@ public static class SiteFile
         {
             if (string.IsNullOrWhiteSpace(s.Label)) throw new InvalidDataException("Every site in sites.json needs a label.");
             if (string.IsNullOrWhiteSpace(s.WeatherFile)) throw new InvalidDataException($"Site '{s.Label}' needs a weatherFile.");
+            if (s.TargetMeanWind50mMs is <= 0) throw new InvalidDataException($"Site '{s.Label}': targetMeanWind50mMs must be above zero.");
             if (s.PvKwp <= 0 && s.WindKw <= 0) throw new InvalidDataException($"Site '{s.Label}' needs pvKwp and/or windKw above zero.");
             if (!s.Format.Equals("nasa", StringComparison.OrdinalIgnoreCase) && !s.Format.Equals("measured", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"Site '{s.Label}': format must be \"nasa\" or \"measured\".");

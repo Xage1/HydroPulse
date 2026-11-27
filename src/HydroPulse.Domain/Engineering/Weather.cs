@@ -17,6 +17,25 @@ public sealed record WeatherSeries(
     IReadOnlyList<WeatherSample> Samples,
     int FilledMissingValues);
 
+public static class WeatherScaling
+{
+    /// <summary>
+    /// Multiplies the 50 m and 10 m wind speeds by a constant factor and leaves irradiance and temperature alone.
+    /// Used to correct a reanalysis series that is known to be too low (or high) against a published site mean.
+    /// The hourly pattern stays the reanalysis pattern, so this is a stop-gap, not a substitute for measured data.
+    /// </summary>
+    public static WeatherSeries WithWindScaled(this WeatherSeries series, double factor)
+    {
+        if (factor <= 0 || double.IsNaN(factor) || double.IsInfinity(factor))
+            throw new ArgumentOutOfRangeException(nameof(factor), "Wind scale factor must be a positive number.");
+
+        var scaled = series.Samples
+            .Select(x => x with { WindSpeed50mMs = x.WindSpeed50mMs * factor, WindSpeed10mMs = x.WindSpeed10mMs * factor })
+            .ToList();
+        return series with { Samples = scaled };
+    }
+}
+
 /// <summary>
 /// Parses NASA POWER hourly CSV exports (community RE) with columns
 /// YEAR,MO,DY,HR,ALLSKY_SFC_SW_DWN,WS50M,WS10M,T2M. Missing values (-999) are carried forward from

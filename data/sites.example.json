@@ -4,6 +4,7 @@
   "includeBuiltIn": true,
   "sites": [
     {
+      // Measured hourly data (met mast, SCADA). Best option.
       "label": "Turkana measured wind",
       "weatherFile": "turkana-measured-2024.csv",
       "format": "measured",
@@ -13,6 +14,18 @@
       "pvKwp": 0,
       "windKw": 10000,
       "dataNote": "met mast, 80 m"
+    },
+    {
+      // Stop-gap: keep NASA's hourly pattern but scale the wind to a published site mean.
+      // LTWP's environmental assessment reports 11 m/s average measured at 43-83 m. Converted to 50 m with
+      // shear exponent 0.14 from about 62 m: 11 x (50/62)^0.14 = about 10.7 m/s.
+      "label": "Turkana wind (scaled to published mean)",
+      "weatherFile": "turkana-2024.csv",
+      "format": "nasa",
+      "targetMeanWind50mMs": 10.7,
+      "pvKwp": 0,
+      "windKw": 10000,
+      "dataNote": "Scaled to the 11 m/s average in the Lake Turkana Wind Power environmental assessment summary."
     }
   ]
 }

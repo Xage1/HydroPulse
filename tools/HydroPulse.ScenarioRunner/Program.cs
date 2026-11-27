@@ -22,7 +22,16 @@ WeatherSeries Load(string name, string file)
 }
 
 var nairobi = Load("Nairobi", "nairobi-2024.csv");
-var turkana = Load("Lake Turkana", "turkana-2024.csv");
+var turkanaNasa = Load("Lake Turkana", "turkana-2024.csv");
+
+// The raw NASA POWER wind for Lake Turkana is far too low (mean 6.6 m/s at 50 m, against an 11 m/s average reported by the
+// Lake Turkana Wind Power environmental assessment). The built-in Turkana sites therefore scale the NASA wind to a mean
+// of 10.0 m/s at 50 m, keeping NASA's hourly pattern. The height of the published average is not stated, so 10.0 is the
+// conservative end of the plausible 10.0 to 10.7 range. Replace with measured data via data/sites.json.
+const double TurkanaTargetMean50mMs = 10.0;
+double turkanaScale = TurkanaTargetMean50mMs / turkanaNasa.Samples.Average(x => x.WindSpeed50mMs);
+var turkana = turkanaNasa.WithWindScaled(turkanaScale);
+Console.WriteLine($"  Lake Turkana: wind speeds scaled x{turkanaScale:F2} to a {TurkanaTargetMean50mMs:F1} m/s mean at 50 m (published average, see docs/SOURCES.md)");
 
 // Demo plant: 10 MW electrolyzer. Renewable capacity is sized by the sweep below.
 var electrolyzer = new ElectrolyzerParameters { RatedPowerKw = 10_000 };
@@ -39,12 +48,27 @@ var siteFile = SiteFile.Load(root);
 var customNotes = new List<string>();
 var measuredLabels = new HashSet<string>();
 var customDataNotes = new Dictionary<string, string>();
+var windScales = new Dictionary<string, double>
+{
+    ["Lake Turkana wind"] = turkanaScale,
+    ["Lake Turkana hybrid"] = turkanaScale
+};
+customDataNotes["Lake Turkana wind"] = customDataNotes["Lake Turkana hybrid"] =
+    $"Scaled to {TurkanaTargetMean50mMs:F1} m/s at 50 m, the conservative end of the 11 m/s average in the Lake Turkana Wind Power environmental assessment summary (the height of that average is not stated, so the conversion to 50 m is ours).";
 if (siteFile is not null)
 {
     if (!siteFile.IncludeBuiltIn) siteList.Clear();
     foreach (var entry in siteFile.Sites)
     {
         var w = SiteFile.LoadWeather(weatherDir, entry);
+        if (entry.TargetMeanWind50mMs is > 0)
+        {
+            double mean = w.Samples.Average(x => x.WindSpeed50mMs);
+            double factor = entry.TargetMeanWind50mMs.Value / mean;
+            w = w.WithWindScaled(factor);
+            windScales[entry.Label] = factor;
+            Console.WriteLine($"  {entry.Label}: wind speeds scaled x{factor:F2} (mean 50 m {mean:F2} -> {entry.TargetMeanWind50mMs.Value:F2} m/s)");
+        }
         Console.WriteLine($"Loaded {entry.Label} ({entry.Format}): {w.Samples.Count} hours, {w.FilledMissingValues} missing values filled");
         siteList.Add((entry.Label, w, new PvParameters { CapacityKwp = entry.PvKwp }, new WindParameters { CapacityKw = entry.WindKw }));
         if (entry.Format.Equals("measured", StringComparison.OrdinalIgnoreCase)) measuredLabels.Add(entry.Label);
@@ -57,16 +81,18 @@ var sites = siteList.ToArray();
 
 // Per-site weather data quality, shown on the dashboard next to any scenario that uses wind.
 const string TurkanaWindNote =
-    "A 310 MW wind plant at Lake Turkana expects about 1,250 GWh a year, roughly a 46% capacity factor by our arithmetic, " +
-    "far above what this data gives, so the wind speeds here are probably too low.";
+    "The Lake Turkana Wind Power environmental assessment reports an average wind speed of 11 m/s measured at 43 to 83 m, " +
+    "and published expected output of 1,250 to 1,440 GWh a year for about 300 MW (roughly 46 to 55% capacity factor by our arithmetic). " +
+    "This data gives far less, so the wind speeds here are too low.";
 var siteData = sites.ToDictionary(
     st => st.Label,
     st => new
     {
-        kind = measuredLabels.Contains(st.Label) ? "measured" : "reanalysis",
+        kind = measuredLabels.Contains(st.Label) ? "measured" : windScales.ContainsKey(st.Label) ? "scaled" : "reanalysis",
+        windScale = windScales.TryGetValue(st.Label, out var ws) ? Math.Round(ws, 3) : (double?)null,
         meanWind50mMs = Math.Round(st.Weather.Samples.Average(x => x.WindSpeed50mMs), 2),
         note = customDataNotes.TryGetValue(st.Label, out var dn) ? dn
-             : (!measuredLabels.Contains(st.Label) && st.Label.Contains("Turkana", StringComparison.OrdinalIgnoreCase) ? TurkanaWindNote : null)
+             : (!measuredLabels.Contains(st.Label) && !windScales.ContainsKey(st.Label) && st.Label.Contains("Turkana", StringComparison.OrdinalIgnoreCase) ? TurkanaWindNote : null)
     });
 
 var modes = new (string Key, string Label, OperatingMode Mode, MatchingPolicy Matching)[]
@@ -83,9 +109,9 @@ var ratios = Enumerable.Range(2, 15).Select(i => i * 0.25)
     .ToArray();
 var scenarios = new List<object>();
 
-// Solar/wind split search for hybrid sites: PV share 0-100% in 10% steps, capacity ratio 0.5-8x in steps of 0.5.
+// Solar/wind split search for hybrid sites: PV share 0-100% in 10% steps, using the same capacity ratios as the sizing sweep
+// so that the best split can never look worse than a pure-wind or pure-solar sweep.
 var pvShares = Enumerable.Range(0, 11).Select(i => i / 10.0).ToArray();
-var mixRatios = Enumerable.Range(1, 16).Select(i => i * 0.5).ToArray();
 
 Console.WriteLine();
 Console.WriteLine($"{"Scenario",-58} {"Ratio",5} {"LCOH $/kg",10} {"El. CF",7} {"RE CF",6} {"H2 t/yr",8} {"Sim.RE",7} {"Mon.RE",7}");
@@ -111,7 +137,7 @@ foreach (var site in sites)
         if (site.Pv.CapacityKwp > 0 && site.Wind.CapacityKw > 0)
         {
             double totalKw = site.Pv.CapacityKwp + site.Wind.CapacityKw;
-            mix = ScenarioAnalysis.OptimizeMix(baseCfg, site.Weather, pvShares, mixRatios);
+            mix = ScenarioAnalysis.OptimizeMix(baseCfg, site.Weather, pvShares, ratios);
             bestPvShare = ScenarioAnalysis.BestPvShare(mix) ?? 0.5;
             baseCfg = baseCfg with
             {

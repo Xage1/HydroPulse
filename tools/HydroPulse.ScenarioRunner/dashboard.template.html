@@ -775,8 +775,11 @@ function renderSummary() {
     const extra = sd && sd.note ? ' ' + sd.note : '';
     note.textContent = sd && sd.kind === 'measured'
       ? 'Wind data: customer measured.' + mean + extra
-      : 'Data caution: wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid), not site measurements.' + mean + extra +
-        ' Treat wind and hybrid results as conservative until measured site data is loaded.';
+      : sd && sd.kind === 'scaled'
+        ? 'Data caution: wind speeds are NASA POWER hourly values multiplied by ' + num(sd.windScale, 2) + ' to match a published site average.' + mean +
+          ' The hour-by-hour pattern is still NASA\'s, not measured.' + extra + ' Replace with measured data before quoting these results.'
+        : 'Data caution: wind speeds come from NASA POWER (MERRA-2 reanalysis, roughly a 50 km grid), not site measurements.' + mean + extra +
+          ' Treat wind and hybrid results as conservative until measured site data is loaded.';
   }
 }
 

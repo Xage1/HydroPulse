@@ -95,3 +95,54 @@ public class MeasuredWeatherTests
         Assert.True(r.Year1.HydrogenTonnes > 0);
     }
 }
+
+public class WindScalingTests
+{
+    private static WeatherSeries Series() => new("Site", 100.0, new List<WeatherSample>
+    {
+        new(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), 0.0, 6.0, 4.0, 20.0),
+        new(new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc), 500.0, 8.0, 5.0, 25.0)
+    }, 0);
+
+    [Fact]
+    public void WithWindScaled_MultipliesWindSpeedsOnly()
+    {
+        var scaled = Series().WithWindScaled(1.5);
+
+        Assert.Equal(9.0, scaled.Samples[0].WindSpeed50mMs, 9);
+        Assert.Equal(6.0, scaled.Samples[0].WindSpeed10mMs, 9);
+        Assert.Equal(12.0, scaled.Samples[1].WindSpeed50mMs, 9);
+        Assert.Equal(500.0, scaled.Samples[1].IrradianceWhPerM2);
+        Assert.Equal(25.0, scaled.Samples[1].AirTemperatureC);
+        Assert.Equal(100.0, scaled.ElevationM);
+    }
+
+    [Fact]
+    public void WithWindScaled_DoesNotChangeTheOriginalSeries()
+    {
+        var original = Series();
+        _ = original.WithWindScaled(2.0);
+        Assert.Equal(6.0, original.Samples[0].WindSpeed50mMs);
+    }
+
+    [Fact]
+    public void WithWindScaled_KeepsTheShearExponent()
+    {
+        // Scaling both heights by the same factor leaves the 10 m / 50 m ratio, so extrapolated hub speed scales by the same factor.
+        var p = new WindParameters { HubHeightM = 80.0 };
+        var s = Series();
+        double before = WindModel.HubHeightSpeed(p, s.Samples[0].WindSpeed50mMs, s.Samples[0].WindSpeed10mMs);
+        var scaled = s.WithWindScaled(1.7);
+        double after = WindModel.HubHeightSpeed(p, scaled.Samples[0].WindSpeed50mMs, scaled.Samples[0].WindSpeed10mMs);
+        Assert.Equal(before * 1.7, after, 9);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    public void WithWindScaled_RejectsNonPositiveFactors(double factor)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Series().WithWindScaled(factor));
+    }
+}

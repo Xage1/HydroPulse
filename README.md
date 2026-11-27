@@ -118,7 +118,7 @@ HydroPulse/
 │     ├─ Hubs/TelemetryHub          SignalR hub at /hubs/telemetry
 │     ├─ Workers/                   H2TelemetrySimulationWorker, ReplaySetup
 │     └─ wwwroot/                   Generated dashboard + SignalR client (git-ignored)
-├─ tests/HydroPulse.Domain.Tests/   88 xUnit tests
+├─ tests/HydroPulse.Domain.Tests/   94 xUnit tests
 ├─ tools/HydroPulse.ScenarioRunner/ Console tool that runs all scenarios and builds the dashboard
 │  ├─ Program.cs, FxRates.cs, LiveAssets.cs
 │  └─ dashboard.template.html       Vanilla JS + SVG dashboard source
@@ -156,7 +156,7 @@ cd F:\devops\HydroPulse
 
 # 1. Build and test
 dotnet build
-dotnet test                      # expect 88 passing
+dotnet test                      # expect 94 passing
 
 # 2. Generate results and the dashboard
 dotnet run --project tools\HydroPulse.ScenarioRunner
@@ -222,7 +222,9 @@ Create `data/sites.json` (start from `data/sites.example.json`) and re-run the s
 }
 ```
 
-`format` is `nasa` (a NASA POWER CSV) or `measured`. A measured CSV needs these columns (names are case-insensitive, `#` lines are skipped):
+`format` is `nasa` (a NASA POWER CSV) or `measured`.
+
+**Stop-gap for a known-low reanalysis site:** add `"targetMeanWind50mMs": 10.7` to a `nasa` site. The runner multiplies the wind speeds by whatever factor makes the mean 50 m speed equal that value, keeps NASA's hour-by-hour pattern, and the dashboard labels the site "scaled" with the factor. Convert a published mean quoted at another height to 50 m first (the example file shows how). This is a correction against a published average, not measured data, and results should not be quoted until measured data replaces it. A measured CSV needs these columns (names are case-insensitive, `#` lines are skipped):
 
 | Column | Required | Meaning |
 |---|---|---|
@@ -440,7 +442,7 @@ Year 1 is simulated hourly from weather. Later years apply PV degradation and st
 
 ### Sizing sweep and sensitivity
 
-- **Solar/wind split.** For sites with both sources, `OptimizeMix` tries solar shares from 0% to 100% in 10% steps, finds the cheapest capacity ratio for each (0.5x to 8x), and keeps the cheapest split. The scenario then sizes around that split. The dashboard shows the whole curve in the *Solar and wind split* card.
+- **Solar/wind split.** For sites with both sources, `OptimizeMix` tries solar shares from 0% to 100% in 10% steps, finds the cheapest capacity ratio for each (0.25x steps to 4x, then 0.5x steps to 8x), and keeps the cheapest split. The scenario then sizes around that split. The dashboard shows the whole curve in the *Solar and wind split* card.
 - **Sweep.** `ScaleRenewables` scales PV and wind together, keeping their mix, so that renewable capacity = ratio x electrolyzer rating. Ratios 0.5 to 4.0 in steps of 0.25, then 4.5 to 8.0 in steps of 0.5.
 - **Tornado.** Each key assumption is moved low and high, one at a time, and the LCOH change is recorded.
 
@@ -469,20 +471,22 @@ Nairobi at 10,000 kWp base capacity, 2024 weather, defaults of 9% discount rate 
 | | Grid, no matching | 1.75 | 7.54 | 100% |
 | | Grid, monthly | 5.00 | 6.53 | 89% |
 | | Grid, hourly | 2.00 | 9.10 | 33% |
-| Turkana wind | Off-grid | 3.25 | 11.27 | 52% |
-| | Grid, no matching | 0.50 | 8.30 | 100% |
-| | Grid, monthly | 3.75 | 10.15 | 66% |
-| | Grid, hourly | 3.25 | 11.27 | 52% |
-| Turkana hybrid (best split: 100% solar) | Off-grid | 2.00 | 8.81 | 34% |
-| | Grid, no matching | 1.75 | 7.41 | 100% |
-| | Grid, monthly | 4.50 | 6.26 | 88% |
-| | Grid, hourly | 2.00 | 8.81 | 34% |
+| Turkana wind (scaled to 10.0 m/s) | Off-grid | 1.25 | 5.08 | 65% |
+| | Grid, no matching | 1.50 | 5.62 | 100% |
+| | Grid, monthly | 1.50 | 4.88 | 78% |
+| | Grid, hourly | 1.25 | 5.08 | 65% |
+| Turkana hybrid (best split: 0% solar, 100% wind; 10% solar ties in no-matching mode) | Off-grid | 1.25 | 5.08 | 65% |
+| | Grid, no matching | 1.50 | 5.62 | 100% |
+| | Grid, monthly | 1.50 | 4.88 | 78% |
+| | Grid, hourly | 1.25 | 5.08 | 65% |
 
-> **Do not quote the Turkana wind or hybrid rows.** The solar/wind optimiser chooses 100% solar at Turkana in every mode, which says the wind input is too weak to earn any share. NASA POWER gives a mean 50 m wind speed of only 6.59 m/s for the file used here and an 18% wind capacity factor, while the 310 MW Lake Turkana Wind Power plant expects about 1,250 GWh a year, roughly a 46% capacity factor (our arithmetic from that figure). The dashboard shows a data-caution note on every wind or hybrid scenario. Replace the input with measured data via `data/sites.json`.
+**Read the Turkana rows as conditional.** The raw NASA POWER wind for Turkana is far too low (mean 6.59 m/s at 50 m, giving an 18% wind capacity factor and $11.27/kg off-grid). The Lake Turkana Wind Power environmental assessment reports an 11 m/s average measured on site. The built-in Turkana sites therefore **scale NASA's wind speeds so their mean is 10.0 m/s at 50 m**, keeping NASA's hourly pattern. That gives a 55% wind capacity factor, at the top of the 46 to 55% implied by the plant's published output (our arithmetic). Scaling to 10.7 m/s instead gives a 60% capacity factor and $4.74/kg off-grid, so the result is sensitive to this assumption. The height of the published average is not stated, so the conversion to 50 m is ours. The dashboard marks these sites as scaled. Replace the input with measured data via `data/sites.json` before quoting any Turkana figure.
+
+**Finding:** where wind is this strong, solar adds nothing. The optimiser picks 0% solar in three of four modes and ties at 10% in the fourth, because solar's 20% capacity factor cannot compete with wind at about 55%.
 
 Earlier placeholders (8% and $1,500/kW) gave, for example, Nairobi off-grid $7.84/kg and Nairobi monthly $5.90/kg, so the sourced defaults raise cost by roughly $0.60-1.30/kg.
 
-Renewable capacity factors are about 18-19%. Hourly matching equals off-grid by construction, which is the point of the comparison: the dashboard shows what the compliance rule costs.
+Nairobi solar has a renewable capacity factor of about 19%; Turkana wind about 55% after scaling. Hourly matching equals off-grid by construction, which is the point of the comparison: the dashboard shows what the compliance rule costs.
 
 ---
 
@@ -528,7 +532,7 @@ The SignalR browser client is saved locally at `wwwroot/lib/signalr.min.js` (Mic
 dotnet test
 ```
 
-88 xUnit tests in `tests/HydroPulse.Domain.Tests`:
+94 xUnit tests in `tests/HydroPulse.Domain.Tests`:
 
 | Suite | Covers |
 |---|---|
@@ -539,7 +543,7 @@ dotnet test
 | `PlantDispatchTests` | Saturation, part-load, standby, compression parasitic load |
 | `GridTariffTests` | Off-peak window, hour-by-hour import gating, demand charge |
 | `MixOptimizerTests` | Solar/wind split search: end points, best share, validation |
-| `MeasuredWeatherTests` | Measured CSV import, height conversion, gap and column validation |
+| `MeasuredWeatherTests` | Measured CSV import, height conversion, gap and column validation, wind scaling |
 
 The scenario runner's printed table is also a regression check: refactors should leave it unchanged.
 
@@ -583,11 +587,11 @@ Notes:
 
 1. **The live plant is simulated.** Telemetry is produced by a worker that replays weather through the same dispatch logic. It is clearly tagged in the UI and in `GET /api/plant` (`source`).
 2. **Placeholder inputs.** Some inputs now have a cited reference range, the rest are still placeholders. See [`docs/SOURCES.md`](docs/SOURCES.md) for exactly which. Do not quote any LCOH figure externally until the inputs are replaced with cited or customer values.
-3. **Weather is reanalysis, not measurements.** NASA POWER is gridded reanalysis and satellite data. Lake Turkana wind is **understated**: the file's mean 50 m wind speed is 6.59 m/s and the modelled wind capacity factor is 18%, against about 46% expected by the operating Lake Turkana Wind Power plant (derived from its published 310 MW and 1,250 GWh a year). On-site measurement or a resource assessment is required for a real project.
+3. **Weather is reanalysis, not measurements.** NASA POWER is gridded reanalysis and satellite data. For Lake Turkana its mean 50 m wind speed (6.59 m/s) is far below the 11 m/s average reported on site, so the built-in Turkana sites scale the NASA wind to a 10.0 m/s mean at 50 m. This keeps NASA's hourly pattern, so it is a correction to a published average, not measured data. The 10.0 value is the conservative end of a 10.0 to 10.7 range because the height of the published average is not stated. On-site measurement or a resource assessment is required for a real project.
 4. **Single-year weather.** 2024 is repeated for the whole project life. No inter-annual variability.
 5. **PV uses horizontal irradiance** with no tilt, tracking, shading or inverter clipping model.
 6. **Wind** uses a generic power curve, not a turbine-specific one.
-7. **Hybrid mix** is optimised in 10% steps of solar share (0-100%) with the capacity ratio searched at each step. The search is coarse, assumes both sources share one site's weather, and ignores land, grid-connection and per-source cost differences beyond the capex inputs.
+7. **Hybrid mix** is optimised in 10% steps of solar share (0-100%), searching the same capacity-ratio grid as the sizing sweep at each step. The search is coarse, assumes both sources share one site's weather, and ignores land, grid-connection and per-source cost differences beyond the capex inputs.
 8. **Compression** uses an ideal-gas model; real-gas effects above ~350 bar are ignored. Storage and dispensing are not modelled.
 9. **Grid carbon intensity is not modelled.** "No matching" hydrogen is cheaper but not certified green.
 10. **Hourly dispatch** in scenarios. Sub-hourly ramping, start-up times and transient effects are not modelled.
